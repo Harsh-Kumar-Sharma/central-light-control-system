@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import { devicesApi } from '../api/resources.js';
+import { badgeClass } from '../utils/status.js';
 
 const devices = ref([]);
 const selectedDeviceId = ref('');
@@ -29,7 +30,7 @@ async function send(payload) {
   }
   try {
     // Firmware validates brightness 1–99 (see backend commandService.js);
-    // out-of-range values are rejected here with INVALID_PARAMETER.
+    // out-of-range values are rejected with INVALID_PARAMETER.
     lastResult.value = await devicesApi.sendCommand(selectedDeviceId.value, payload);
   } catch (err) {
     lastResult.value = err.response?.data ?? null;
@@ -42,47 +43,64 @@ onMounted(load);
 
 <template>
   <div>
-    <h1>Device Control</h1>
-    <p v-if="error" class="error">{{ error }}</p>
+    <div v-if="error" class="alert error">{{ error }}</div>
 
-    <label>
-      Select Device
-      <select v-model="selectedDeviceId">
-        <option disabled value="">— choose a device —</option>
-        <option v-for="d in devices" :key="d.id" :value="d.id">{{ d.device_name }} ({{ d.transmitter_name }})</option>
-      </select>
-    </label>
+    <div class="card">
+      <div class="field select-device">
+        <label for="dev">Select device</label>
+        <select id="dev" v-model="selectedDeviceId">
+          <option disabled value="">— choose a device —</option>
+          <option v-for="d in devices" :key="d.id" :value="d.id">{{ d.device_name }} ({{ d.transmitter_name }})</option>
+        </select>
+      </div>
+    </div>
 
-    <fieldset>
-      <legend>Brightness</legend>
-      <input v-model="brightness" type="number" min="1" max="99" />
-      <button @click="sendBrightness">Apply</button>
-      <p class="hint">Valid range: 1–99 (firmware-enforced; protocol's 0–100% is an open issue).</p>
-    </fieldset>
+    <div class="grid controls">
+      <div class="card">
+        <div class="card-title"><h2>Brightness</h2><span class="badge amber">1 – 99</span></div>
+        <div class="slider-row">
+          <input v-model="brightness" type="range" min="1" max="99" />
+          <input v-model="brightness" type="number" min="1" max="99" class="num" />
+        </div>
+        <button class="btn" @click="sendBrightness">Apply brightness</button>
+        <p class="hint">Firmware-enforced range. The protocol's 0–100% is an open issue.</p>
+      </div>
 
-    <fieldset>
-      <legend>Relay 1</legend>
-      <button @click="sendRelay('relay1', true)">ON</button>
-      <button @click="sendRelay('relay1', false)">OFF</button>
-    </fieldset>
+      <div class="card">
+        <div class="card-title"><h2>Relay 1</h2></div>
+        <div class="pair">
+          <button class="btn success" @click="sendRelay('relay1', true)">Turn ON</button>
+          <button class="btn danger" @click="sendRelay('relay1', false)">Turn OFF</button>
+        </div>
+      </div>
 
-    <fieldset>
-      <legend>Relay 2</legend>
-      <button @click="sendRelay('relay2', true)">ON</button>
-      <button @click="sendRelay('relay2', false)">OFF</button>
-    </fieldset>
+      <div class="card">
+        <div class="card-title"><h2>Relay 2</h2></div>
+        <div class="pair">
+          <button class="btn success" @click="sendRelay('relay2', true)">Turn ON</button>
+          <button class="btn danger" @click="sendRelay('relay2', false)">Turn OFF</button>
+        </div>
+      </div>
+    </div>
 
-    <div v-if="lastResult">
-      <h2>Command Result</h2>
+    <div v-if="lastResult" class="card">
+      <div class="card-title">
+        <h2>Command result</h2>
+        <span class="badge" :class="badgeClass(lastResult.status)">{{ lastResult.status ?? 'ERROR' }}</span>
+      </div>
       <pre>{{ JSON.stringify(lastResult, null, 2) }}</pre>
     </div>
   </div>
 </template>
 
 <style scoped>
-fieldset { margin: 1rem 0; padding: 0.75rem; }
-button { margin-left: 0.5rem; padding: 0.4rem 0.8rem; cursor: pointer; }
-.hint { font-size: 0.8rem; color: #666; }
-.error { color: #c0392b; }
-pre { background: #f5f5f5; padding: 0.75rem; overflow-x: auto; }
+.select-device { max-width: 420px; }
+.controls { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.controls .card { margin-bottom: 0; }
+.slider-row { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1rem; }
+.slider-row input[type='range'] { flex: 1; padding: 0; accent-color: var(--primary); }
+.num { width: 76px; }
+.pair { display: flex; gap: 0.7rem; }
+.pair .btn { flex: 1; }
+pre { margin: 0; background: var(--surface-2); padding: 0.9rem; border-radius: var(--radius-sm); overflow-x: auto; }
 </style>

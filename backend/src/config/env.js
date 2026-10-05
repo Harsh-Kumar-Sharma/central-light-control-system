@@ -1,4 +1,10 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+
+// override: a local backend/.env must win over stale OS-level variables
+// (this dev PC has a leftover Windows DB_PASSWORD that otherwise silently
+// replaces the value in .env). In Docker there is no .env file in the image,
+// so compose-provided variables are unaffected.
+dotenv.config({ override: true });
 
 function required(name, fallback) {
   const value = process.env[name] ?? fallback;

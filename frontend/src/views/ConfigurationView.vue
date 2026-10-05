@@ -38,29 +38,38 @@ onMounted(load);
 
 <template>
   <div>
-    <h1>Status Monitoring Configuration</h1>
-    <p class="hint">
-      Admin-only. Values marked TBD in the SRS have no confirmed default — the
-      offline threshold below was seeded at 90s as a development placeholder only.
-    </p>
-    <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="saved" class="ok">Saved.</p>
+    <div v-if="error" class="alert error">{{ error }}</div>
+    <div v-if="saved" class="alert success">Configuration saved.</div>
 
-    <form @submit.prevent="save" class="form">
-      <label><input v-model="config.enabled" type="checkbox" /> Status Monitoring Enabled</label>
-      <label>Polling Interval (s) <input v-model="config.polling_interval_seconds" type="number" /></label>
-      <label>Response Timeout (s) <input v-model="config.response_timeout_seconds" type="number" /></label>
-      <label>Retry Count <input v-model="config.retry_count" type="number" /></label>
-      <label>Offline Threshold (s) <input v-model="config.offline_threshold_seconds" type="number" /></label>
-      <label>Status Polling Mode <input v-model="config.status_polling_mode" type="text" /></label>
-      <button type="submit">Save</button>
+    <form class="card form" @submit.prevent="save">
+      <div class="card-title"><h2>Status monitoring</h2></div>
+      <p class="hint">
+        Admin only. Values marked TBD in the SRS have no confirmed default — the offline
+        threshold was seeded at 90s as a development placeholder.
+      </p>
+
+      <label class="check"><input v-model="config.enabled" type="checkbox" /> Status monitoring enabled</label>
+
+      <div class="grid two">
+        <div class="field">
+          <label>Polling interval (s)</label>
+          <input v-model="config.polling_interval_seconds" type="number" min="3" placeholder="10" />
+          <span class="hint" style="margin:0">How often receivers that have a <strong>status command</strong> are asked for their state (Control map). Empty = 10 s, minimum 3 s.</span>
+        </div>
+        <div class="field"><label>Response timeout (s)</label><input v-model="config.response_timeout_seconds" type="number" /></div>
+        <div class="field"><label>Retry count</label><input v-model="config.retry_count" type="number" /></div>
+        <div class="field"><label>Offline threshold (s)</label><input v-model="config.offline_threshold_seconds" type="number" /></div>
+        <div class="field"><label>Status polling mode</label><input v-model="config.status_polling_mode" type="text" /></div>
+      </div>
+
+      <div><button class="btn" type="submit">Save configuration</button></div>
     </form>
   </div>
 </template>
 
 <style scoped>
-.form { display: flex; flex-direction: column; gap: 0.75rem; max-width: 320px; }
-.hint { color: #666; font-size: 0.85rem; }
-.error { color: #c0392b; }
-.ok { color: #2e7d32; }
+.form { max-width: 640px; display: flex; flex-direction: column; gap: 1rem; }
+.two { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.check { display: flex; align-items: center; gap: 0.5rem; color: var(--text); font-size: 0.95rem; }
+.check input { width: 18px; height: 18px; accent-color: var(--primary); }
 </style>

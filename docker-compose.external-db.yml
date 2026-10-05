@@ -1,0 +1,60 @@
+name: highway-led-control
+
+# Use this instead of docker-compose.yml when pointing at an external MySQL
+# server (no local `mysql` service/container). Config comes from .env — see
+# .env.external-db.example.
+#
+#   docker compose -f docker-compose.external-db.yml up -d --build
+#   docker compose -f docker-compose.external-db.yml run --rm backend npm run migrate
+#   docker compose -f docker-compose.external-db.yml run --rm backend npm run seed
+#   docker compose -f docker-compose.external-db.yml restart backend
+#
+# NOTE: the .env keys here are prefixed APP_ deliberately. A plain DB_PASSWORD
+# collides with a pre-existing Windows environment variable found on this
+# machine (System Properties > Environment Variables, User AND Machine
+# scope) — Docker Compose gives OS-level env vars priority over .env file
+# values, so an unprefixed DB_PASSWORD here would silently use the wrong,
+# stale system value instead of what's in .env. Do not rename these back
+# without first checking `[Environment]::GetEnvironmentVariable("DB_PASSWORD","Machine")`
+# in PowerShell is empty.
+
+services:
+  mqtt:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mqtt:
+        condition: service_started
+    environment:
+      PORT: 4000
+      DB_HOST: ${APP_DB_HOST:?set APP_DB_HOST in .env}
+      DB_PORT: ${APP_DB_PORT:-3306}
+      DB_USER: ${APP_DB_USER:?set APP_DB_USER in .env}
+      DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env}
+      DB_NAME: ${APP_DB_NAME:-highway_led_control}
+      JWT_SECRET: ${APP_JWT_SECRET:?set APP_JWT_SECRET in .env before deploying}
+      JWT_EXPIRES_IN: 8h
+      MQTT_URL: mqtt://mqtt:1883
+      SEED_ADMIN_USERNAME: ${APP_SEED_ADMIN_USERNAME:-admin}
+      SEED_ADMIN_PASSWORD: ${APP_SEED_ADMIN_PASSWORD:?set APP_SEED_ADMIN_PASSWORD in .env before deploying}
+    ports:
+      - "4000:4000"
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"

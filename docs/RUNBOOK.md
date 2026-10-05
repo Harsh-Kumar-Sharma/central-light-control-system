@@ -132,3 +132,58 @@ exists in this environment:
 - [ ] Open Issues backlog (SRS §13, PRD §15) reviewed and explicitly accepted or scheduled — not silently dropped
 - [ ] Production gaps in §2 above have an owner and a plan
 - [ ] Real firmware/protocol files supplied and reconciled against this implementation, per the PRD's own source-of-truth rule
+
+## 7. Control center (road map) and live status
+
+The **Control** page draws each road with its lights; a light's colour is the receiver's live state
+(green online, red offline, grey no data) and it glows when a relay is ON. Click a light to see its
+relays and brightness and to switch them. Admins design the road under **Edit layout**.
+
+How the app knows a receiver's state (LAN transmitters):
+
+- **Status command** (Devices > edit receiver). Text sent to ask the device for its state, e.g.
+  `Tx_{address}_STATUS` (`{address}` = the receiver's network address). The backend sends it to every
+  enabled receiver that has one, every *Polling interval* seconds (Configuration page, default 10, minimum 3),
+  and reads relay 1/2 and brightness from the reply. Accepted reply shapes: JSON such as
+  `{"relay1":true,"relay2":false,"brightness":40}` (also `r1`/`lux` style keys, nested under `status`),
+  or plain text like `R1:ON R2:OFF LUX:30`. Anything else is shown as "reply not understood" with the raw text.
+- **Online / offline.** A good reply = online. Two silent polls in a row = offline. If the *transmitter* itself
+  cannot be reached, everything behind it goes offline at once.
+- **Acknowledged commands** also update the stored state (Relay 1 ON acknowledged -> relay 1 is ON), tagged
+  "from the last command" so you can tell it apart from "reported by the device".
+- A receiver with **no status command** is never polled: its state is only whatever the last acknowledged command set.
+- Relay names (Devices > edit receiver) are shown on the map and in the dialog.
+
+Operational notes:
+
+- Run **one backend per site**. Commands and polls to a transmitter are queued so they never overlap, but that
+  queue lives inside one backend process; two backends (e.g. a dev server and a Docker one) pointed at the same
+  database and devices would poll and command the same transmitter at once.
+- All timestamps are exchanged in UTC (`backend/src/db/pool.js`), so "last seen" is right even when the app
+  machine and the database server are in different timezones.
+- Road drawings are stored as JSON in the `roads` table. Deleting a receiver that is drawn on a road leaves its
+  light on the map shown as "?" until you edit the layout and remove or re-link it.
+
+### What the real transmitter actually replies (verified on the bench device)
+
+The LAN transmitter answers every line it receives with a serial-style log, not JSON:
+
+```
+SYSTEM >> Tx_2_R1OFF
+Send to Address : 2
+Command         : R1OFF
+LoRa << +OK
+Reply Address:2,Message:ACK:R1OFF
+```
+
+- `LoRa << +OK` only means the transmitter *sent* the radio packet. The receiver's answer is the
+  `Reply Address:<n>,Message:...` line, which can arrive a moment later. A command counts as SUCCESS only when
+  that line is an ACK for the **same command** from the **same address**; anything else is recorded as
+  ACKNOWLEDGED and the stored relay state is left alone.
+- Status query `Tx_2_STATUS` answers `Message:STATUS:R1=0_R2=0`. It does not report brightness, so brightness
+  on the map is "from the last command".
+- A LoRa link handles one conversation at a time. **Run only one backend against a device.** This was seen
+  for real: a second backend (no shared queue with the first one's 5-second poll) sent a command that got
+  `+OK` but no receiver ACK, and the relay did not change; the same command through the single backend worked
+  every time. For an extra instance (test run, second dev server) set `DISABLE_STATUS_POLLING=true`, and don't
+  send device commands from it while another backend is running.

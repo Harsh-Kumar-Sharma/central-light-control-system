@@ -10,6 +10,7 @@ import { groupsRouter } from './routes/groups.js';
 import { auditRouter } from './routes/audit.js';
 import { statusMonitoringRouter } from './routes/statusMonitoring.js';
 import { dashboardRouter } from './routes/dashboard.js';
+import { roadsRouter } from './routes/roads.js';
 
 // Express app configuration only — no listen(), no MQTT connect, no
 // background jobs. Kept separate from server.js so the test suite can
@@ -32,6 +33,7 @@ app.use('/api/groups', groupsRouter);
 app.use('/api/audit', auditRouter);
 app.use('/api/status-monitoring', statusMonitoringRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/roads', roadsRouter);
 
 // Consistent error shape (SRS §9.1 conventions).
 app.use((err, req, res, next) => {

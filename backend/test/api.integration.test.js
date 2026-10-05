@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 
@@ -17,15 +17,19 @@ process.env.JWT_SECRET ??= 'test-secret';
 
 let dbAvailable = false;
 let app;
+let pool;
 
 try {
-  const { pool } = await import('../src/db/pool.js');
+  ({ pool } = await import('../src/db/pool.js'));
   await pool.query('SELECT 1');
   dbAvailable = true;
   ({ app } = await import('../src/app.js'));
 } catch {
   dbAvailable = false;
 }
+
+// Without this the open connection pool keeps the process alive and the run hangs.
+after(async () => { if (pool) await pool.end().catch(() => {}); });
 
 const skip = dbAvailable ? false : 'requires a live, migrated+seeded MySQL database (none available in this environment)';
 
@@ -34,10 +38,12 @@ test('TC-002: invalid login credentials are rejected with 401', { skip }, async 
   assert.equal(res.status, 401);
 });
 
-test('TC-001: valid Admin login returns a token', { skip }, async () => {
+// Needs real credentials: run with TEST_ADMIN_USERNAME / TEST_ADMIN_PASSWORD set.
+const loginSkip = skip || (process.env.TEST_ADMIN_USERNAME && process.env.TEST_ADMIN_PASSWORD ? false : 'set TEST_ADMIN_USERNAME and TEST_ADMIN_PASSWORD to run this');
+test('TC-001: valid Admin login returns a token', { skip: loginSkip }, async () => {
   const res = await request(app)
     .post('/api/auth/login')
-    .send({ username: process.env.SEED_ADMIN_USERNAME ?? 'admin', password: process.env.SEED_ADMIN_PASSWORD ?? 'ChangeMe123!' });
+    .send({ username: process.env.TEST_ADMIN_USERNAME, password: process.env.TEST_ADMIN_PASSWORD });
   assert.equal(res.status, 200);
   assert.ok(res.body.token);
 });

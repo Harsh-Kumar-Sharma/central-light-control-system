@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { groupsApi, devicesApi } from '../api/resources.js';
 import { useAuthStore } from '../stores/auth.js';
+import { badgeClass } from '../utils/status.js';
 
 const auth = useAuthStore();
 const isAdmin = computed(() => auth.role === 'Admin');
@@ -41,16 +42,8 @@ async function sendGroupBrightness() {
   try {
     groupResult.value = await groupsApi.sendCommand(selectedGroupId.value, { type: 'brightness', value: Number(brightness.value) });
   } catch (err) {
-    error.value = err.response?.data?.error ?? 'Group command failed';
+    error.value = err.response?.data?.error ?? err.response?.data?.message ?? 'Group command failed';
   }
-}
-
-// PARTIAL_SUCCESS is rendered distinctly (amber) from full SUCCESS/FAILED,
-// per SRS §7.2 — never collapsed to a plain "Success".
-function resultClass(aggregate) {
-  if (aggregate === 'SUCCESS') return 'ok';
-  if (aggregate === 'PARTIAL_SUCCESS') return 'partial';
-  return 'fail';
 }
 
 onMounted(load);
@@ -58,55 +51,67 @@ onMounted(load);
 
 <template>
   <div>
-    <h1>Group Management</h1>
-    <p v-if="error" class="error">{{ error }}</p>
+    <div v-if="error" class="alert error">{{ error }}</div>
 
-    <table>
-      <thead><tr><th>Name</th><th>Members</th></tr></thead>
-      <tbody>
-        <tr v-for="g in groups" :key="g.id"><td>{{ g.name }}</td><td>{{ g.member_count }}</td></tr>
-      </tbody>
-    </table>
+    <div class="card">
+      <div class="card-title"><h2>Groups</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Members</th></tr></thead>
+          <tbody>
+            <tr v-for="g in groups" :key="g.id">
+              <td><strong>{{ g.name }}</strong></td>
+              <td><span class="badge blue">{{ g.member_count }} devices</span></td>
+            </tr>
+            <tr v-if="!groups.length"><td colspan="2" class="empty">No groups yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
 
-    <form v-if="isAdmin" @submit.prevent="createGroup" class="inline-form">
-      <input v-model="newGroup.name" placeholder="Group name" required />
-      <select v-model="newGroup.deviceIds" multiple>
-        <option v-for="d in devices" :key="d.id" :value="d.id">{{ d.device_name }}</option>
-      </select>
-      <button type="submit">Create Group</button>
-    </form>
+      <form v-if="isAdmin" @submit.prevent="createGroup" class="form-row">
+        <input v-model="newGroup.name" placeholder="Group name" required />
+        <select v-model="newGroup.deviceIds" multiple class="multi">
+          <option v-for="d in devices" :key="d.id" :value="d.id">{{ d.device_name }}</option>
+        </select>
+        <button class="btn" type="submit">+ Create group</button>
+      </form>
+      <p v-if="isAdmin" class="hint">Hold Ctrl / Cmd to select several devices.</p>
+    </div>
 
-    <h2>Group Control</h2>
-    <label>
-      Select Group
-      <select v-model="selectedGroupId">
-        <option disabled value="">— choose a group —</option>
-        <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
-      </select>
-    </label>
-    <input v-model="brightness" type="number" min="1" max="99" />
-    <button @click="sendGroupBrightness">Apply to Group</button>
+    <div class="card">
+      <div class="card-title"><h2>Group control</h2></div>
+      <div class="form-row first">
+        <select v-model="selectedGroupId">
+          <option disabled value="">— choose a group —</option>
+          <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
+        </select>
+        <input v-model="brightness" type="number" min="1" max="99" placeholder="Brightness 1–99" />
+        <button class="btn" @click="sendGroupBrightness">Apply to group</button>
+      </div>
 
-    <div v-if="groupResult">
-      <h3 :class="resultClass(groupResult.aggregate)">Group Result: {{ groupResult.aggregate }}</h3>
-      <table>
-        <thead><tr><th>Receiver ID</th><th>Status</th></tr></thead>
-        <tbody>
-          <tr v-for="r in groupResult.results" :key="r.receiverId">
-            <td>{{ r.receiverId }}</td><td>{{ r.status }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div v-if="groupResult" class="result">
+        <div class="card-title">
+          <h2>Group result</h2>
+          <span class="badge" :class="badgeClass(groupResult.aggregate)">{{ groupResult.aggregate }}</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Receiver ID</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr v-for="r in groupResult.results" :key="r.receiverId">
+                <td>{{ r.receiverId }}</td>
+                <td><span class="badge" :class="badgeClass(r.status)">{{ r.status }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-table { border-collapse: collapse; width: 100%; margin-bottom: 0.75rem; }
-th, td { border: 1px solid #ddd; padding: 0.4rem 0.6rem; text-align: left; }
-.inline-form { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1.5rem; }
-.error { color: #c0392b; }
-.ok { color: #2e7d32; }
-.partial { color: #b8860b; }
-.fail { color: #c0392b; }
+.multi { min-height: 90px; }
+.form-row.first { margin-top: 0; }
+.result { margin-top: 1.2rem; }
 </style>

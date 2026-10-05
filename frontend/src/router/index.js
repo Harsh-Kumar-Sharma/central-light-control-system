@@ -4,7 +4,7 @@ import LoginView from '../views/LoginView.vue';
 import AppLayout from '../components/AppLayout.vue';
 import DashboardView from '../views/DashboardView.vue';
 import DevicesView from '../views/DevicesView.vue';
-import DeviceControlView from '../views/DeviceControlView.vue';
+import ControlView from '../views/ControlView.vue';
 import GroupsView from '../views/GroupsView.vue';
 import StatusMonitoringView from '../views/StatusMonitoringView.vue';
 import ConfigurationView from '../views/ConfigurationView.vue';
@@ -21,7 +21,7 @@ const router = createRouter({
       children: [
         { path: '', name: 'dashboard', component: DashboardView },
         { path: 'devices', name: 'devices', component: DevicesView },
-        { path: 'control', name: 'control', component: DeviceControlView, meta: { roles: ['Admin', 'Operator'] } },
+        { path: 'control', name: 'control', component: ControlView },
         { path: 'groups', name: 'groups', component: GroupsView, meta: { roles: ['Admin', 'Operator'] } },
         { path: 'status', name: 'status', component: StatusMonitoringView },
         { path: 'configuration', name: 'configuration', component: ConfigurationView, meta: { roles: ['Admin'] } },
