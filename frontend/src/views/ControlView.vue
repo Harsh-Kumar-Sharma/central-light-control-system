@@ -11,8 +11,8 @@ import DeviceControlView from './DeviceControlView.vue';
 import { emptyLayout, newId, straightRoad, crossroad } from '../utils/roadTemplates.js';
 
 const auth = useAuthStore();
-const isAdmin = computed(() => auth.role === 'Admin');
-const canControl = computed(() => auth.role === 'Admin' || auth.role === 'Operator');
+const isAdmin = computed(() => auth.can('control', 'design')); // road designer
+const canControl = computed(() => auth.can('control', 'control'));
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const messageOf = (err, fallback) => err.response?.data?.error?.message ?? fallback;
@@ -64,6 +64,7 @@ async function loadLive() {
     if (id !== roadId.value) return; // user switched road while this was in flight
     live.value = Object.fromEntries(data.lights.map((l) => [l.receiverId, l]));
     liveLoaded.value = true;
+    lastUpdated.value = Date.now();
   } catch (err) {
     error.value = messageOf(err, 'Could not load live status');
   }
@@ -73,8 +74,18 @@ async function loadReceivers() {
   try { receivers.value = await devicesApi.list(); } catch { /* the sidebar just stays empty */ }
 }
 
+const lastUpdated = ref(null);
+const nowTick = ref(Date.now());
+const updatedText = computed(() => {
+  if (!lastUpdated.value) return 'not loaded yet';
+  const s = Math.max(0, Math.round((nowTick.value - lastUpdated.value) / 1000));
+  return s < 5 ? 'just now' : `${s} s ago`;
+});
+
 let timer = null;
+let clock = null;
 onMounted(async () => {
+  clock = setInterval(() => { nowTick.value = Date.now(); }, 1000);
   try {
     await Promise.all([loadRoads(), loadReceivers()]);
   } catch (err) {
@@ -88,6 +99,7 @@ onMounted(async () => {
 });
 onBeforeUnmount(() => {
   clearInterval(timer);
+  clearInterval(clock);
   window.removeEventListener('keydown', onKey);
   window.removeEventListener('beforeunload', onBeforeUnload);
 });
@@ -338,6 +350,58 @@ const liveForCanvas = computed(() => {
   return map;
 });
 
+/* ---------------- lights panel (search + filter) ---------------- */
+const query = ref('');
+const filter = ref('all');
+const FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'online', label: 'Online' },
+  { id: 'offline', label: 'Offline' },
+  { id: 'lit', label: 'Lit' },
+];
+const stateOf = (i) => (!i ? 'nodata' : i.online === true ? 'online' : i.online === false ? 'offline' : 'nodata');
+const isLit = (i) => Boolean(i && (i.relay1 === true || i.relay2 === true));
+const lightRows = computed(() => {
+  const q = query.value.trim().toLowerCase();
+  return layout.value.lights
+    .map((l) => ({ key: l.id, info: live.value[l.receiverId], receiverId: l.receiverId, label: l.label }))
+    .filter((r) => r.info)
+    .filter((r) => {
+      if (filter.value === 'online' && stateOf(r.info) !== 'online') return false;
+      if (filter.value === 'offline' && stateOf(r.info) !== 'offline') return false;
+      if (filter.value === 'lit' && !isLit(r.info)) return false;
+      if (!q) return true;
+      return `${r.info.name} ${r.info.address} ${r.label ?? ''}`.toLowerCase().includes(q);
+    });
+});
+
+/* ---------------- bulk switching ---------------- */
+const bulk = reactive({ open: false, relay: 'both', state: true, busy: false, done: 0, total: 0, failed: [], finished: false });
+const bulkTargets = computed(() => layout.value.lights.map((l) => live.value[l.receiverId]).filter((i) => i && i.enabled));
+function openBulk(state) {
+  Object.assign(bulk, { open: true, state, relay: 'both', busy: false, done: 0, total: 0, failed: [], finished: false });
+}
+async function runBulk() {
+  const targets = bulkTargets.value;
+  const relays = bulk.relay === 'both' ? [1, 2] : [Number(bulk.relay)];
+  Object.assign(bulk, { busy: true, done: 0, total: targets.length, failed: [], finished: false });
+  // One light at a time: the transmitter handles a single command at once.
+  for (const t of targets) {
+    let ok = true;
+    for (const n of relays) {
+      try {
+        const r = await devicesApi.sendCommand(t.receiverId, { type: `relay${n}`, state: bulk.state });
+        if (r.status && !['SUCCESS', 'ACKNOWLEDGED', 'SENT_OVER_LORA'].includes(r.status)) ok = false;
+      } catch { ok = false; }
+    }
+    if (!ok) bulk.failed.push(t.name);
+    bulk.done += 1;
+  }
+  bulk.busy = false;
+  bulk.finished = true;
+  await loadLive();
+}
+
 /* ---------------- opening a light ---------------- */
 const openLight = computed(() => (openId.value != null ? live.value[openId.value] ?? null : null));
 function onLightClick(receiverId) {
@@ -380,6 +444,9 @@ function onLightClick(receiverId) {
           </div>
           <div class="bar-right">
             <template v-if="!editing">
+              <span class="updated" title="The map refreshes by itself every 5 seconds"><i class="pulse" /> Updated {{ updatedText }}</span>
+              <button v-if="canControl && roadId" class="btn success" data-action="all-on" @click="openBulk(true)">All ON</button>
+              <button v-if="canControl && roadId" class="btn danger" data-action="all-off" @click="openBulk(false)">All OFF</button>
               <button class="btn secondary" @click="loadLive">Refresh</button>
               <button v-if="isAdmin" class="btn secondary" @click="newRoad.open = true">+ New road</button>
               <button v-if="isAdmin && roadId" class="btn" data-action="edit-layout" @click="startEdit">✎ Edit layout</button>
@@ -391,15 +458,15 @@ function onLightClick(receiverId) {
           </div>
         </div>
 
-        <div class="chips" data-summary>
-          <span class="chip"><b>{{ summary.total }}</b> lights</span>
-          <span class="chip green"><b>{{ summary.online }}</b> online</span>
-          <span class="chip red"><b>{{ summary.offline }}</b> offline</span>
-          <span v-if="summary.nodata" class="chip gray"><b>{{ summary.nodata }}</b> no data</span>
-          <span class="chip amber"><b>{{ summary.lit }}</b> lit</span>
+        <div class="kpis" data-summary>
+          <div class="kpi"><span class="k-ico primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0012 3z"/></svg></span><div><div class="k-val">{{ summary.total }}</div><div class="k-lbl">Lights</div></div></div>
+          <div class="kpi"><span class="k-ico green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg></span><div><div class="k-val">{{ summary.online }}</div><div class="k-lbl">Online</div></div></div>
+          <div class="kpi"><span class="k-ico red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span><div><div class="k-val">{{ summary.offline }}</div><div class="k-lbl">Offline</div></div></div>
+          <div class="kpi"><span class="k-ico amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v10m6.4-6.4a9 9 0 11-12.8 0"/></svg></span><div><div class="k-val">{{ summary.lit }}</div><div class="k-lbl">Lit now</div></div></div>
+          <div v-if="summary.nodata" class="kpi"><span class="k-ico gray"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 9a3 3 0 115 2c-1 1-2 1.5-2 3M12 18h.01"/></svg></span><div><div class="k-val">{{ summary.nodata }}</div><div class="k-lbl">No data</div></div></div>
         </div>
 
-        <div class="stage" :class="{ editing }">
+        <div class="stage" :class="{ editing, browsing: !editing }">
           <RoadCanvas
             ref="canvasRef"
             :layout="shown"
@@ -443,6 +510,32 @@ function onLightClick(receiverId) {
             @cancel-draft="canvasRef?.cancelDraft()"
             @delete-road="delRoad.open = true"
           />
+          <aside v-else class="lights-panel" aria-label="Lights on this road">
+            <div class="lp-head">
+              <h3>Lights</h3>
+              <span class="muted">{{ lightRows.length }} of {{ summary.total }}</span>
+            </div>
+            <input v-model="query" class="lp-search" type="search" placeholder="Search name or address…" aria-label="Search lights" />
+            <div class="lp-filters" role="group" aria-label="Filter lights">
+              <button v-for="f in FILTERS" :key="f.id" type="button" :class="{ on: filter === f.id }" :aria-pressed="filter === f.id" @click="filter = f.id">{{ f.label }}</button>
+            </div>
+            <ul class="lp-list">
+              <li v-for="r in lightRows" :key="r.key">
+                <button type="button" class="lp-row" :data-state="stateOf(r.info)" @click="onLightClick(r.receiverId)">
+                  <span class="lp-dot" :class="stateOf(r.info)" />
+                  <span class="lp-main">
+                    <span class="lp-name">{{ r.label || r.info.name }}</span>
+                    <span class="lp-sub">address {{ r.info.address }} · {{ stateOf(r.info) === 'online' ? 'online' : stateOf(r.info) === 'offline' ? 'offline' : 'no data' }}</span>
+                  </span>
+                  <span class="lp-relays" title="Relay 1 · Relay 2">
+                    <i :class="{ on: r.info.relay1 === true, off: r.info.relay1 === false }" />
+                    <i :class="{ on: r.info.relay2 === true, off: r.info.relay2 === false }" />
+                  </span>
+                </button>
+              </li>
+              <li v-if="!lightRows.length" class="lp-empty">{{ summary.total ? 'No lights match.' : 'No lights on this road yet.' }}</li>
+            </ul>
+          </aside>
         </div>
 
         <div class="legend">
@@ -458,6 +551,39 @@ function onLightClick(receiverId) {
 
     <!-- light control -->
     <LightControlModal v-if="openLight" :light="openLight" :can-control="canControl" @close="openId = null" @changed="loadLive" />
+
+    <!-- bulk switch -->
+    <Modal v-if="bulk.open" :title="bulk.state ? 'Switch all lights ON' : 'Switch all lights OFF'" width="460px" @close="!bulk.busy && (bulk.open = false)">
+      <div class="stack">
+        <p v-if="!bulk.finished">
+          This sends <strong>{{ bulk.state ? 'ON' : 'OFF' }}</strong> to <strong>{{ bulkTargets.length }}</strong> light{{ bulkTargets.length === 1 ? '' : 's' }} on
+          <strong>{{ roadName }}</strong>, one after another. Disabled lights are skipped.
+        </p>
+        <div v-if="!bulk.finished" class="field">
+          <label for="bulkRelay">Which relay</label>
+          <select id="bulkRelay" v-model="bulk.relay" :disabled="bulk.busy">
+            <option value="both">Both relays</option>
+            <option value="1">Relay 1 only</option>
+            <option value="2">Relay 2 only</option>
+          </select>
+        </div>
+        <div v-if="bulk.busy || bulk.finished" class="progress" role="progressbar" :aria-valuenow="bulk.done" :aria-valuemax="bulk.total">
+          <div class="bar-fill" :style="{ width: (bulk.total ? (bulk.done / bulk.total) * 100 : 0) + '%' }" />
+        </div>
+        <p v-if="bulk.busy" class="muted">Sending… {{ bulk.done }} of {{ bulk.total }}</p>
+        <div v-if="bulk.finished && !bulk.failed.length" class="alert success">Done — all {{ bulk.total }} lights accepted the command.</div>
+        <div v-if="bulk.finished && bulk.failed.length" class="alert warn">
+          {{ bulk.total - bulk.failed.length }} of {{ bulk.total }} succeeded. No confirmation from: {{ bulk.failed.join(', ') }}.
+        </div>
+        <p v-if="!bulkTargets.length" class="alert info">There are no enabled lights on this road.</p>
+      </div>
+      <template #footer>
+        <button class="btn secondary" :disabled="bulk.busy" @click="bulk.open = false">{{ bulk.finished ? 'Close' : 'Cancel' }}</button>
+        <button v-if="!bulk.finished" class="btn" :class="bulk.state ? 'success' : 'danger'" :disabled="bulk.busy || !bulkTargets.length" data-action="bulk-run" @click="runBulk">
+          {{ bulk.busy ? 'Sending…' : bulk.state ? 'Switch ON' : 'Switch OFF' }}
+        </button>
+      </template>
+    </Modal>
 
     <!-- new road -->
     <Modal v-if="newRoad.open" title="New road" width="440px" @close="newRoad.open = false">
@@ -532,7 +658,7 @@ function onLightClick(receiverId) {
 <style scoped>
 .tabs { display: inline-flex; gap: 0.25rem; padding: 0.25rem; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 1rem; }
 .tabs button { border: 0; background: transparent; color: var(--text-muted); font: inherit; font-weight: 700; padding: 0.45rem 1.1rem; border-radius: 9px; cursor: pointer; }
-.tabs button.on { background: var(--primary); color: #fff; }
+.tabs button.on { background: var(--primary); color: var(--on-primary); }
 .tabs button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .bar { display: flex; justify-content: space-between; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
@@ -540,12 +666,54 @@ function onLightClick(receiverId) {
 .road-select { min-width: 240px; font-weight: 700; }
 .editing-title { font-size: 1.05rem; }
 
+.updated { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.8rem; color: var(--text-muted); margin-right: 0.3rem; }
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--online); animation: pulse 2s infinite; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--online) 55%, transparent); } 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.7rem; margin-bottom: 0.9rem; }
+.kpi { display: flex; align-items: center; gap: 0.75rem; padding: 0.7rem 0.9rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+.k-ico { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; flex: none; }
+.k-ico svg { width: 20px; height: 20px; }
+.k-ico.primary { background: var(--primary-soft); color: var(--primary); }
+.k-ico.green { background: var(--green-soft); color: var(--green-fg); }
+.k-ico.red { background: var(--red-soft); color: var(--red-fg); }
+.k-ico.amber { background: var(--amber-soft); color: var(--amber-fg); }
+.k-ico.gray { background: var(--surface-2); color: var(--text-muted); }
+.k-val { font-size: 1.45rem; font-weight: 800; line-height: 1.1; }
+.k-lbl { font-size: 0.78rem; color: var(--text-muted); font-weight: 600; }
+
+.stage.browsing { grid-template-columns: minmax(0, 1fr) 300px; }
+@media (max-width: 1100px) { .stage.browsing { grid-template-columns: 1fr; } }
+.lights-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 0.9rem; display: flex; flex-direction: column; gap: 0.6rem; max-height: 640px; }
+.lp-head { display: flex; align-items: baseline; justify-content: space-between; }
+.lp-head h3 { font-size: 1rem; }
+.lp-search { width: 100%; }
+.lp-filters { display: flex; gap: 0.3rem; }
+.lp-filters button { flex: 1; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-muted); font: inherit; font-size: 0.8rem; font-weight: 600; padding: 0.3rem 0; border-radius: 8px; cursor: pointer; }
+.lp-filters button.on { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.lp-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 0.3rem; }
+.lp-row { width: 100%; display: flex; align-items: center; gap: 0.65rem; text-align: left; padding: 0.55rem 0.65rem; border: 1px solid var(--border); background: var(--surface-2); border-radius: 10px; color: var(--text); font: inherit; cursor: pointer; transition: border-color 0.15s; }
+.lp-row:hover { border-color: var(--primary); }
+.lp-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--lamp-unknown); }
+.lp-dot.online { background: var(--online); }
+.lp-dot.offline { background: var(--offline); }
+.lp-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.lp-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lp-sub { font-size: 0.75rem; color: var(--text-muted); }
+.lp-relays { display: flex; gap: 4px; }
+.lp-relays i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--text-muted); opacity: 0.6; }
+.lp-relays i.on { background: var(--online); border-color: var(--online); opacity: 1; }
+.lp-empty { color: var(--text-muted); text-align: center; padding: 1rem 0; font-size: 0.85rem; }
+.progress { height: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--primary); transition: width 0.2s; }
+
 .chips { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.9rem; }
 .chip { padding: 0.28rem 0.8rem; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); font-size: 0.85rem; }
-.chip.green { background: var(--green-soft); color: var(--green); border-color: transparent; }
-.chip.red { background: var(--red-soft); color: var(--red); border-color: transparent; }
+.chip.green { background: var(--green-soft); color: var(--green-fg); border-color: transparent; }
+.chip.red { background: var(--red-soft); color: var(--red-fg); border-color: transparent; }
 .chip.gray { background: var(--surface-2); color: var(--text-muted); }
-.chip.amber { background: var(--amber-soft); color: #b7791f; border-color: transparent; }
+.chip.amber { background: var(--amber-soft); color: var(--amber-fg); border-color: transparent; }
 
 .stage { display: grid; grid-template-columns: 1fr; gap: 1rem; align-items: start; }
 .stage.editing { grid-template-columns: minmax(0, 1fr) 310px; }
@@ -553,13 +721,13 @@ function onLightClick(receiverId) {
 
 .legend { display: flex; gap: 1.2rem; flex-wrap: wrap; align-items: center; margin-top: 0.8rem; font-size: 0.85rem; }
 .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 0.35rem; vertical-align: middle; }
-.dot.green { background: var(--green); }
-.dot.red { background: var(--red); }
-.dot.gray { background: #94a3b8; }
+.dot.green { background: var(--online); }
+.dot.red { background: var(--offline); }
+.dot.gray { background: var(--lamp-unknown); }
 .dot.glow { background: #fbbf24; box-shadow: 0 0 8px 3px rgba(251, 191, 36, 0.6); }
 .muted { color: var(--text-muted); }
 .empty-state { text-align: center; padding: 3rem 1rem; }
 .empty-state p { max-width: 460px; margin: 0.6rem auto 1.2rem; }
 .stack { display: flex; flex-direction: column; gap: 0.9rem; }
-.hint.warn { color: #b7791f; }
+.hint.warn { color: var(--amber-fg); }
 </style>

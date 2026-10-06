@@ -3,18 +3,60 @@ import { isAllowedTestTarget, isValidPort, sendTcpMessage } from './deviceTestSe
 import { parseStatusReply, isReplyComplete } from './statusParser.js';
 import { withTransmitterLock } from './transmitterLock.js';
 import { getSystemMonitoringConfig } from './monitoringService.js';
+import { recordSensors } from './sensorService.js';
+import { raiseDeviceOffline, resolveDeviceOffline, raiseTransmitterOffline, resolveTransmitterOffline } from './alarmService.js';
 
 const LINE_ENDINGS = { none: '', lf: '\n', crlf: '\r\n' };
 const REPLY_TIMEOUT_MS = 4000;
 const DEFAULT_POLL_SECONDS = 10; // used when no polling interval is configured
 const FAILURES_BEFORE_OFFLINE = 2;
 
+// Reports replay this log (uptime, hours lit, energy), so every change of online
+// state, relay or brightness is appended. A logging failure must never break a status write.
+const snapshot = async (id) => {
+  const [rows] = await pool.query('SELECT online, relay1, relay2, brightness FROM device_status WHERE receiver_id = ?', [id]);
+  return rows[0] ?? null;
+};
+async function logIfChanged(id, prev) {
+  try {
+    const cur = await snapshot(id);
+    if (!cur) return;
+    const same = prev && ['online', 'relay1', 'relay2', 'brightness'].every((k) => (prev[k] ?? null) === (cur[k] ?? null));
+    // Unchanged is skipped, except the very first time: a light that never changes still needs a starting record.
+    if (same) {
+      const [has] = await pool.query('SELECT 1 FROM light_state_log WHERE receiver_id = ? LIMIT 1', [id]);
+      if (has.length) return;
+    }
+    await pool.query(
+      'INSERT INTO light_state_log (receiver_id, online, relay1, relay2, brightness) VALUES (?, ?, ?, ?, ?)',
+      [id, cur.online ?? null, cur.relay1 ?? null, cur.relay2 ?? null, cur.brightness ?? null]
+    );
+  } catch (err) {
+    console.error('State log failed:', err.message);
+  }
+}
+
+// At startup: give every light that already has a status a starting record, so reports
+// can count its uptime from now even if it never changes state.
+export async function backfillStateLog() {
+  try {
+    await pool.query(
+      `INSERT INTO light_state_log (receiver_id, online, relay1, relay2, brightness)
+       SELECT ds.receiver_id, ds.online, ds.relay1, ds.relay2, ds.brightness FROM device_status ds
+       WHERE NOT EXISTS (SELECT 1 FROM light_state_log l WHERE l.receiver_id = ds.receiver_id)`
+    );
+  } catch (err) {
+    console.error('State log backfill failed:', err.message);
+  }
+}
+
 const bit = (v) => (v === null || v === undefined ? null : v ? 1 : 0);
 
 // Writes what we know about a receiver. null fields keep their old value.
 // state_source / state_at move only when relay or brightness info is present.
-export async function applyStatus(receiverId, { online = true, relay1 = null, relay2 = null, brightness = null, rssi = null, snr = null, source = null }) {
+export async function applyStatus(receiverId, { online = true, relay1 = null, relay2 = null, brightness = null, rssi = null, snr = null, source = null, sensors = null }) {
   const hasState = relay1 !== null || relay2 !== null || brightness !== null;
+  const prev = await snapshot(receiverId);
   await pool.query(
     `INSERT INTO device_status (receiver_id, online, brightness, relay1, relay2, rssi, snr, last_seen, last_status_at, state_source, state_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?, ${hasState ? 'NOW()' : 'NULL'})
@@ -30,13 +72,21 @@ export async function applyStatus(receiverId, { online = true, relay1 = null, re
        ${hasState ? ', state_source = VALUES(state_source), state_at = NOW()' : ''}`,
     [receiverId, online ? 1 : 0, brightness, bit(relay1), bit(relay2), rssi, snr, hasState ? source : null]
   );
+  await logIfChanged(receiverId, prev);
+  if (sensors) await recordSensors(receiverId, sensors).catch((err) => console.error('Sensor record failed:', err.message));
+  // Alarm bookkeeping must never break a status write.
+  if (online) await resolveDeviceOffline(receiverId).catch((err) => console.error('Alarm resolve failed:', err.message));
 }
 
-export async function markOffline(receiverId) {
+// alarm: false when the cause is a transmitter outage that already has its own alarm.
+export async function markOffline(receiverId, { alarm = true } = {}) {
+  const prev = await snapshot(receiverId);
   await pool.query(
     'INSERT INTO device_status (receiver_id, online) VALUES (?, FALSE) ON DUPLICATE KEY UPDATE online = FALSE',
     [receiverId]
   );
+  await logIfChanged(receiverId, prev);
+  if (alarm) await raiseDeviceOffline(receiverId).catch((err) => console.error('Alarm raise failed:', err.message));
 }
 
 // What a successfully acknowledged command says about the device's state.
@@ -118,12 +168,15 @@ export async function pollAllOnce() {
         console.error(`Status poll failed for receiver ${row.id}:`, err.message);
         continue;
       }
+      if (result.connected) await resolveTransmitterOffline(row.transmitter_id).catch(() => {});
       if (result.ok) {
         failures.delete(row.id);
         await applyStatus(row.id, { online: true, ...result.parsed, source: 'reported' });
       } else if (!result.connected) {
         // Transmitter itself is down: everything behind it is unreachable, don't wait on each.
-        for (const r of group) { failures.delete(r.id); await markOffline(r.id); }
+        // One transmitter alarm covers them all, so the lights don't each raise their own.
+        await raiseTransmitterOffline(row.transmitter_id, result.detail).catch((err) => console.error('Alarm raise failed:', err.message));
+        for (const r of group) { failures.delete(r.id); await markOffline(r.id, { alarm: false }); }
         break;
       } else if (result.reason === 'NO_REPLY' || result.reason === 'UNPARSED') {
         const n = (failures.get(row.id) ?? 0) + 1;

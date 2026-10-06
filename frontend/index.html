@@ -3,7 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Highway LED Control</title>
+    <title>ARS Highway LED Control</title>
+    <meta name="description" content="Highway LED lighting control and monitoring — ARS Private Limited" />
+
+    <link rel="icon" href="/brand/favicon/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/brand/favicon/favicon.ico" sizes="any" />
+    <link rel="apple-touch-icon" href="/brand/app-icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#192496" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0a1428" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+
+    <!-- Apply the saved (or system) theme before first paint so there is no light/dark flash.
+         Keep in sync with src/utils/theme.js. -->
+    <script>
+      (function () {
+        try {
+          var pref = localStorage.getItem('theme') || 'system';
+          var dark = pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        } catch (e) {
+          document.documentElement.dataset.theme = 'light';
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

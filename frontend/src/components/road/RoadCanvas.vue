@@ -19,14 +19,43 @@ const draft = ref([]);          // road being drawn (tool = road)
 const hover = ref(null);        // last pointer position in canvas units
 const panning = ref(false);
 
+// Everything drawn (road points, lights, labels) -> one bounding box, so the
+// view can zoom to the road instead of showing a mostly empty canvas.
+function contentBounds() {
+  const pts = [
+    ...props.layout.segments.flatMap((s) => s.points),
+    ...props.layout.lights,
+    ...props.layout.labels,
+  ];
+  if (!pts.length) return null;
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  return { x1: Math.min(...xs), x2: Math.max(...xs), y1: Math.min(...ys), y2: Math.max(...ys) };
+}
+
 function fit() {
   const { width, height } = props.layout.canvas;
-  Object.assign(vb, { x: 0, y: 0, w: width, h: height });
+  const b = props.editable ? null : contentBounds();
+  if (!b) {
+    Object.assign(vb, { x: 0, y: 0, w: width, h: height });
+    return;
+  }
+  const pad = 110; // room for the road's width and the light names
+  // View mode: the box hugs the drawing; the element's height follows it (see svgStyle).
+  const w = Math.max(b.x2 - b.x1 + pad * 2, width * 0.4);
+  const h = Math.max(b.y2 - b.y1 + pad * 2, w * 0.34);
+  const cx = (b.x1 + b.x2) / 2;
+  const cy = (b.y1 + b.y2) / 2;
+  Object.assign(vb, { x: cx - w / 2, y: cy - h / 2, w, h });
 }
-watch(() => [props.layout.canvas.width, props.layout.canvas.height], fit, { immediate: true });
+watch(() => [props.layout.canvas.width, props.layout.canvas.height, props.editable], fit, { immediate: true });
+// A different road was loaded (the layout object is replaced; live refreshes don't touch it).
+watch(() => props.layout, () => { if (!props.editable) fit(); });
 watch(() => props.tool, () => { draft.value = []; });
 
 const viewBox = computed(() => `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+// Editing keeps the fixed-height canvas; viewing sizes the map to the drawing so there is no dead space.
+const svgStyle = computed(() => (props.editable ? null : { height: 'auto', minHeight: '260px', maxHeight: '640px', aspectRatio: `${vb.w} / ${vb.h}` }));
 const geoms = computed(() => props.layout.segments.map((s) => ({ s, g: segmentGeometry(s) })));
 
 /* ---------------- light appearance ---------------- */
@@ -224,6 +253,7 @@ const empty = computed(() => !props.layout.segments.length && !props.layout.ligh
       class="road-canvas"
       :class="[`tool-${editable ? tool : 'view'}`, { panning }]"
       :viewBox="viewBox"
+      :style="svgStyle"
       tabindex="0"
       role="application"
       aria-label="Road map"
@@ -359,7 +389,7 @@ const empty = computed(() => !props.layout.segments.length && !props.layout.ligh
 
 .bg { fill: var(--surface); stroke: var(--border); }
 .grid-dot { fill: var(--border); }
-.asphalt { fill: none; stroke: #3b4256; stroke-linejoin: round; stroke-linecap: round; }
+.asphalt { fill: none; stroke: var(--asphalt); stroke-linejoin: round; stroke-linecap: round; }
 .road-select { fill: none; stroke: var(--primary); stroke-opacity: 0.35; stroke-linejoin: round; stroke-linecap: round; }
 .edge-line { fill: none; stroke: #e5e7eb; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; opacity: 0.9; }
 .lane-line { fill: none; stroke: #fbbf24; stroke-width: 2; stroke-dasharray: 14 12; stroke-linejoin: round; }
@@ -375,14 +405,15 @@ const empty = computed(() => !props.layout.segments.length && !props.layout.ligh
 .light { cursor: default; outline: none; }
 .light.clickable { cursor: pointer; }
 .editable .light { cursor: move; }
-.light .base { fill: #94a3b8; stroke: #fff; stroke-width: 3; transition: fill 0.25s; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35)); }
-.light[data-state='online'] .base { fill: var(--green); }
-.light[data-state='offline'] .base { fill: var(--red); }
-.light[data-state='unknown'] .base { fill: #94a3b8; }
+.light .base { fill: var(--lamp-unknown); stroke: #fff; stroke-width: 3; transition: fill 0.25s; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35)); }
+.light[data-state='online'] .base { fill: var(--online); }
+.light[data-state='offline'] .base { fill: var(--offline); }
+.light[data-state='unknown'] .base { fill: var(--lamp-unknown); }
 .light[data-state='disabled'] .base { fill: #cbd5e1; }
 .light[data-state='missing'] .base { fill: #e2e8f0; stroke: #94a3b8; stroke-dasharray: 4 3; }
 .light.clickable:hover .base, .light.clickable:focus-visible .base { stroke: var(--primary); stroke-width: 4; }
-.glyph path { fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* dark theme: the lamp colours are bright, so the bulb is drawn dark on them (contrast) */
+ .glyph path { fill: none; stroke: var(--lamp-glyph); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .light[data-state='disabled'] .glyph path, .light[data-state='missing'] .glyph path { stroke: #64748b; }
 .slash { stroke: #64748b; stroke-width: 3; stroke-linecap: round; }
 .qmark { text-anchor: middle; font-size: 18px; font-weight: 800; fill: #64748b; }

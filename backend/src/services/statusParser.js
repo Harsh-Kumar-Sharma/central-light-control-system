@@ -29,10 +29,31 @@ const toNumber = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
+// Sensor readings that may ride along in the same reply. Each has a plausible range;
+// anything outside it is treated as "not reported" rather than stored as nonsense.
+//   ambient  lux     (outside light)        voltage  V      current  A
+//   power    W       energy   kWh           temperature  C   motion  on/off
+// "lux" alone is ambiguous: older firmware uses it for the dimming level. It counts as the
+// dimming level (legacy) unless the reply also has an explicit brightness/dim/level key,
+// or the number is above 100 (a dimming level never is) - then it is ambient light.
+const SENSOR_RANGE = { ambient: [0, 200000], voltage: [0, 1000], current: [0, 1000], power: [0, 1000000], energy: [0, 1e9], temperature: [-60, 200] };
+const SENSOR_ALIASES = {
+  ambient: ['ambient', 'ambientlux', 'ambientlight', 'illuminance', 'ldr', 'luxsensor', 'lightlevel'],
+  voltage: ['voltage', 'volt', 'volts', 'vac', 'v'],
+  current: ['current', 'amp', 'amps', 'ampere', 'amperes'],
+  power: ['power', 'watt', 'watts', 'pwr', 'activepower'],
+  energy: ['energy', 'kwh'],
+  temperature: ['temperature', 'temp'],
+  motion: ['motion', 'pir', 'presence', 'occupancy'],
+};
+const inRange = (name, n) => (n !== null && n >= SENSOR_RANGE[name][0] && n <= SENSOR_RANGE[name][1] ? n : null);
+const emptySensors = () => ({ ambient: null, motion: null, voltage: null, current: null, power: null, energy: null, temperature: null });
+export const hasSensors = (sensors) => Object.values(sensors ?? {}).some((v) => v !== null);
+
 const KEY_ALIASES = {
   relay1: ['relay1', 'r1'],
   relay2: ['relay2', 'r2'],
-  brightness: ['brightness', 'lux', 'dim', 'dimming', 'level'],
+  brightness: ['brightness', 'dim', 'dimming', 'level'],
   rssi: ['rssi'],
   snr: ['snr'],
 };
@@ -44,7 +65,8 @@ function fromObject(obj) {
   for (const value of Object.values(obj)) {
     if (value && typeof value === 'object' && !Array.isArray(value)) Object.assign(flat, value);
   }
-  const out = { relay1: null, relay2: null, brightness: null, rssi: null, snr: null };
+  const out = { relay1: null, relay2: null, brightness: null, rssi: null, snr: null, sensors: emptySensors() };
+  let luxRaw = null;
   for (const [rawKey, value] of Object.entries(flat)) {
     const key = normalizeKey(rawKey);
     if (KEY_ALIASES.relay1.includes(key)) out.relay1 = toBool(value) ?? out.relay1;
@@ -52,6 +74,19 @@ function fromObject(obj) {
     else if (KEY_ALIASES.brightness.includes(key)) out.brightness = toBrightness(value) ?? out.brightness;
     else if (KEY_ALIASES.rssi.includes(key)) out.rssi = toNumber(value) ?? out.rssi;
     else if (KEY_ALIASES.snr.includes(key)) out.snr = toNumber(value) ?? out.snr;
+    else if (key === 'lux') luxRaw = toNumber(value);
+    else {
+      for (const [name, aliases] of Object.entries(SENSOR_ALIASES)) {
+        if (!aliases.includes(key)) continue;
+        if (name === 'motion') out.sensors.motion = toBool(value) ?? out.sensors.motion;
+        else out.sensors[name] = inRange(name, toNumber(value)) ?? out.sensors[name];
+      }
+    }
+  }
+  if (luxRaw !== null) {
+    const explicitBrightness = Object.keys(flat).some((k) => KEY_ALIASES.brightness.includes(normalizeKey(k)));
+    if (explicitBrightness || luxRaw > 100) out.sensors.ambient = inRange('ambient', luxRaw) ?? out.sensors.ambient;
+    else out.brightness = toBrightness(luxRaw) ?? out.brightness;
   }
   // An ACK such as {"message":"ACK:R1ON"} also states a relay, via the text rules.
   if (typeof obj.message === 'string') {
@@ -62,7 +97,7 @@ function fromObject(obj) {
 }
 
 function fromPlainText(text) {
-  const out = { relay1: null, relay2: null, brightness: null, rssi: null, snr: null };
+  const out = { relay1: null, relay2: null, brightness: null, rssi: null, snr: null, sensors: emptySensors() };
   // (?<![a-z0-9]) rather than \b so "_R1ON" / "ACK:R1ON" still match.
   const relay = (n) => text.match(new RegExp(`(?:relay[\\s_]*${n}|(?<![a-z0-9])r${n})\\s*[:=_\\s-]*\\s*(on|off|1|0|true|false)(?![a-z0-9])`, 'i'));
   const r1 = relay(1);
@@ -71,6 +106,21 @@ function fromPlainText(text) {
   if (r2) out.relay2 = toBool(r2[1]);
   const b = text.match(/(?:brightness|lux|dim(?:ming)?|level)[\s_]*[:=_\s-]*\s*(\d{1,3})(?!\d)/i);
   if (b) out.brightness = toBrightness(Number(b[1]));
+  // Sensors in plain text: "voltage=230 power:148 ambient=320 motion:on". "lux 320" (more than 3 digits of
+  // dimming level is impossible) is ambient light.
+  const val = (names) => { const m = text.match(new RegExp('(?<![a-z0-9])(?:' + names + ')\\s*[:=]\\s*(-?\\d+(?:\\.\\d+)?)', 'i')); return m ? Number(m[1]) : null; };
+  out.sensors.ambient = inRange('ambient', val('ambient(?:[\\s_]*lux)?|illuminance|ldr'));
+  if (out.sensors.ambient === null) {
+    const lux = text.match(/(?<![a-z0-9])lux\s*[:=]?\s*(\d{4,6}|1\d\d|[2-9]\d\d)(?!\d)/i);
+    if (lux) { out.sensors.ambient = inRange('ambient', Number(lux[1])); out.brightness = null; }
+  }
+  out.sensors.voltage = inRange('voltage', val('voltage|volts?|vac'));
+  out.sensors.current = inRange('current', val('current|amps?'));
+  out.sensors.power = inRange('power', val('power|watts?|pwr'));
+  out.sensors.energy = inRange('energy', val('energy|kwh'));
+  out.sensors.temperature = inRange('temperature', val('temperature|temp'));
+  const motion = text.match(/(?<![a-z0-9])(?:motion|pir|presence)\s*[:=]\s*(on|off|1|0|true|false)(?![a-z0-9])/i);
+  if (motion) out.sensors.motion = toBool(motion[1]);
   const rssi = text.match(/rssi\s*[:=]\s*(-?\d+)/i);
   if (rssi) out.rssi = Number(rssi[1]);
   const snr = text.match(/snr\s*[:=]\s*(-?\d+)/i);
@@ -92,7 +142,7 @@ export function parseStatusReply(reply) {
   if (!parsed) return null;
 
   const hasState = parsed.relay1 !== null || parsed.relay2 !== null || parsed.brightness !== null;
-  return hasState ? parsed : null;
+  return hasState || hasSensors(parsed.sensors) ? parsed : null;
 }
 
 // An acknowledgement of a command, in either shape seen so far:

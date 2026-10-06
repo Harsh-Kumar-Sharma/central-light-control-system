@@ -7,8 +7,10 @@ import DeviceTestModal from '../components/DeviceTestModal.vue';
 import ReceiverControlModal from '../components/ReceiverControlModal.vue';
 
 const auth = useAuthStore();
-const isAdmin = computed(() => auth.role === 'Admin');
-const canTest = computed(() => auth.role === 'Admin' || auth.role === 'Operator');
+const canAdd = computed(() => auth.can('devices', 'create'));
+const canEdit = computed(() => auth.can('devices', 'edit'));
+const canDelete = computed(() => auth.can('devices', 'delete'));
+const canTest = computed(() => auth.can('devices', 'test'));
 
 const transmitters = ref([]);
 const devices = ref([]);
@@ -102,13 +104,13 @@ async function saveTx() {
 const rxModal = reactive({ open: false, editingId: null, saving: false, error: '' });
 const rxForm = reactive({
   deviceName: '', parentTransmitterId: '', loraAddress: '', networkId: '', location: '', enabled: true,
-  relay1Name: '', relay2Name: '', statusCommand: '',
+  relay1Name: '', relay2Name: '', statusCommand: '', relay1Watts: '', relay2Watts: '', latitude: '', longitude: '',
 });
 
 function openAddRx() {
   Object.assign(rxForm, {
     deviceName: '', parentTransmitterId: '', loraAddress: '', networkId: '', location: '', enabled: true,
-    relay1Name: '', relay2Name: '', statusCommand: '',
+    relay1Name: '', relay2Name: '', statusCommand: '', relay1Watts: '', relay2Watts: '', latitude: '', longitude: '',
   });
   Object.assign(rxModal, { open: true, editingId: null, saving: false, error: '' });
 }
@@ -118,6 +120,8 @@ function openEditRx(d) {
     deviceName: d.device_name, parentTransmitterId: d.parent_transmitter_id, loraAddress: d.lora_address,
     networkId: d.network_id ?? '', location: d.location ?? '', enabled: d.status === 'active',
     relay1Name: d.relay1_name ?? '', relay2Name: d.relay2_name ?? '', statusCommand: d.status_command ?? '',
+    relay1Watts: d.relay1_watts ?? '', relay2Watts: d.relay2_watts ?? '',
+    latitude: d.latitude ?? '', longitude: d.longitude ?? '',
   });
   Object.assign(rxModal, { open: true, editingId: d.id, saving: false, error: '' });
 }
@@ -136,6 +140,10 @@ async function saveRx() {
         relay1Name: rxForm.relay1Name,
         relay2Name: rxForm.relay2Name,
         statusCommand: rxForm.statusCommand,
+        relay1Watts: rxForm.relay1Watts,
+        relay2Watts: rxForm.relay2Watts,
+        latitude: rxForm.latitude,
+        longitude: rxForm.longitude,
         status: rxForm.enabled ? 'active' : 'inactive',
       });
     } else {
@@ -148,6 +156,10 @@ async function saveRx() {
         relay1Name: rxForm.relay1Name,
         relay2Name: rxForm.relay2Name,
         statusCommand: rxForm.statusCommand,
+        relay1Watts: rxForm.relay1Watts,
+        relay2Watts: rxForm.relay2Watts,
+        latitude: rxForm.latitude,
+        longitude: rxForm.longitude,
       });
     }
     rxModal.open = false;
@@ -195,7 +207,7 @@ onMounted(load);
     <div class="card">
       <div class="card-title">
         <h2>Transmitters</h2>
-        <button v-if="isAdmin" class="btn" @click="openAddTx">+ Add transmitter</button>
+        <button v-if="canAdd" class="btn" @click="openAddTx">+ Add transmitter</button>
       </div>
       <p class="hint">
         <strong>Connection</strong> shows the result of the last Ping / Port test.
@@ -229,10 +241,10 @@ onMounted(load);
                 <button class="act" title="Test connection" :disabled="t.connection_mode !== 'lan'" @click="testTx = t">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path :d="icons.test" /></svg>
                 </button>
-                <button v-if="isAdmin" class="act" title="Edit" @click="openEditTx(t)">
+                <button v-if="canEdit" class="act" title="Edit" @click="openEditTx(t)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path :d="icons.edit" /></svg>
                 </button>
-                <button v-if="isAdmin" class="act danger" title="Delete" @click="askDelete('tx', t)">
+                <button v-if="canDelete" class="act danger" title="Delete" @click="askDelete('tx', t)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path :d="icons.trash" /></svg>
                 </button>
               </td>
@@ -247,7 +259,7 @@ onMounted(load);
     <div class="card">
       <div class="card-title">
         <h2>Receivers</h2>
-        <button v-if="isAdmin" class="btn" @click="openAddRx">+ Add receiver</button>
+        <button v-if="canAdd" class="btn" @click="openAddRx">+ Add receiver</button>
       </div>
       <div class="table-wrap">
         <table>
@@ -264,10 +276,10 @@ onMounted(load);
                 <button class="act control" title="Send commands (relay / brightness)" @click="controlRx = d">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path :d="icons.bolt" /></svg>
                 </button>
-                <button v-if="isAdmin" class="act" title="Edit" @click="openEditRx(d)">
+                <button v-if="canEdit" class="act" title="Edit" @click="openEditRx(d)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path :d="icons.edit" /></svg>
                 </button>
-                <button v-if="isAdmin" class="act danger" title="Delete" @click="askDelete('rx', d)">
+                <button v-if="canDelete" class="act danger" title="Delete" @click="askDelete('rx', d)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path :d="icons.trash" /></svg>
                 </button>
               </td>
@@ -335,8 +347,14 @@ onMounted(load);
         <div class="field"><label>Network address * <span class="muted">(the number in Tx_&lt;address&gt;_…)</span></label><input v-model="rxForm.loraAddress" type="number" min="0" max="65535" required /></div>
         <div class="field"><label>Network ID</label><input v-model="rxForm.networkId" type="number" min="0" /></div>
         <div class="field full"><label>Location</label><input v-model="rxForm.location" /></div>
+        <div class="field"><label>Latitude</label><input v-model="rxForm.latitude" type="number" step="any" min="-90" max="90" placeholder="26.912400" /></div>
+        <div class="field"><label>Longitude</label><input v-model="rxForm.longitude" type="number" step="any" min="-180" max="180" placeholder="75.787300" /></div>
+        <span class="hint full" style="margin:0">Optional. Or place the light by clicking its spot on the GPS map.</span>
         <div class="field"><label>Relay 1 name</label><input v-model="rxForm.relay1Name" maxlength="64" placeholder="Relay 1" /></div>
         <div class="field"><label>Relay 2 name</label><input v-model="rxForm.relay2Name" maxlength="64" placeholder="Relay 2" /></div>
+        <div class="field"><label>Relay 1 load (watts)</label><input v-model="rxForm.relay1Watts" type="number" min="0" max="65535" placeholder="e.g. 150" /></div>
+        <div class="field"><label>Relay 2 load (watts)</label><input v-model="rxForm.relay2Watts" type="number" min="0" max="65535" placeholder="e.g. 150" /></div>
+        <span class="hint full" style="margin:0">The rated power of what each relay switches. Reports use it to estimate energy and cost; leave empty to leave this light out of those totals.</span>
         <div class="field full">
           <label>Status command <span class="muted">(asks the device for its state)</span></label>
           <input v-model="rxForm.statusCommand" maxlength="500" class="mono" placeholder="e.g. Tx_{address}_STATUS" />
@@ -384,9 +402,9 @@ onMounted(load);
 }
 .act svg { width: 17px; height: 17px; }
 .act:hover:not(:disabled) { background: var(--primary-soft); color: var(--primary); border-color: var(--primary); }
-.act.danger:hover:not(:disabled) { background: var(--red-soft); color: var(--red); border-color: var(--red); }
+.act.danger:hover:not(:disabled) { background: var(--red-soft); color: var(--red-fg); border-color: var(--red); }
 .act.control { color: var(--amber); }
-.act.control:hover:not(:disabled) { background: var(--amber-soft); color: #b7791f; border-color: var(--amber); }
+.act.control:hover:not(:disabled) { background: var(--amber-soft); color: var(--amber-fg); border-color: var(--amber); }
 .act:disabled { opacity: 0.4; cursor: not-allowed; }
 .muted { color: var(--text-muted); font-weight: 400; }
 .mono { font-family: ui-monospace, Consolas, monospace; }

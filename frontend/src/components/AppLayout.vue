@@ -1,13 +1,15 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
+import { alarmsApi } from '../api/resources.js';
+import BrandLogo from './BrandLogo.vue';
+import ThemeToggle from './ThemeToggle.vue';
+import CopyrightLine from './CopyrightLine.vue';
 
 const auth = useAuthStore();
 const route = useRoute();
 
-const isAdmin = computed(() => auth.role === 'Admin');
-const canControl = computed(() => auth.role === 'Admin' || auth.role === 'Operator');
 
 // Inline SVG paths (24x24, stroke icons) — no icon dependency needed.
 const icons = {
@@ -15,67 +17,86 @@ const icons = {
   devices: 'M4 6h16M4 12h16M4 18h16',
   control: 'M12 2v10m6.4-6.4a9 9 0 11-12.8 0',
   groups: 'M17 20h5v-2a4 4 0 00-5-3.9M9 11a4 4 0 100-8 4 4 0 000 8zm8 0a3 3 0 100-6M2 20v-2a4 4 0 014-4h6a4 4 0 014 4v2',
+  sensors: 'M14 14.76V3.5a2.5 2.5 0 00-5 0v11.26a4.5 4.5 0 105 0z',
+  tunnels: 'M3 20V12a9 9 0 0118 0v8M7 20v-8a5 5 0 0110 0v8',
+  map: 'M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11zM12 12a2 2 0 100-4 2 2 0 000 4z',
+  reports: 'M4 20V10m6 10V4m6 16v-7m6 7H2',
+  alarms: 'M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0zM12 9v4m0 4h.01',
+  schedules: 'M12 7v5l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z',
   status: 'M3 12h4l3-8 4 16 3-8h4',
   config: 'M12 15a3 3 0 100-6 3 3 0 000 6zm7.4-3a7.4 7.4 0 00-.1-1.2l2-1.6-2-3.4-2.4 1a7.5 7.5 0 00-2-1.2L14.5 3h-4l-.4 2.6a7.5 7.5 0 00-2 1.2l-2.4-1-2 3.4 2 1.6a7.4 7.4 0 000 2.4l-2 1.6 2 3.4 2.4-1a7.5 7.5 0 002 1.2l.4 2.6h4l.4-2.6a7.5 7.5 0 002-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z',
   users: 'M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zm13 10v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8',
   logs: 'M9 12h6M9 16h6M9 8h2M7 3h7l5 5v13H7z',
 };
 
+// Alarm count for the bell and the sidebar badge, refreshed while the tab is visible.
+const alarms = ref({ unacknowledged: 0, open: 0, critical: 0 });
+const alarmCount = computed(() => alarms.value.unacknowledged);
+async function loadAlarms({ force = false } = {}) {
+  if (!auth.can('alarms') || (document.hidden && !force)) return;
+  try { alarms.value = await alarmsApi.summary(); } catch { /* the bell just keeps its last value */ }
+}
+let alarmTimer = null;
+onMounted(() => { loadAlarms({ force: true }); alarmTimer = setInterval(loadAlarms, 15000); });
+onBeforeUnmount(() => clearInterval(alarmTimer));
+
 const links = computed(() => [
-  { to: '/', label: 'Dashboard', icon: 'dashboard', show: true },
-  { to: '/devices', label: 'Devices', icon: 'devices', show: true },
-  { to: '/control', label: 'Control', icon: 'control', show: true },
-  { to: '/groups', label: 'Groups', icon: 'groups', show: canControl.value },
-  { to: '/status', label: 'Status', icon: 'status', show: true },
-  { to: '/logs', label: 'Logs', icon: 'logs', show: canControl.value },
-  { to: '/configuration', label: 'Configuration', icon: 'config', show: isAdmin.value },
-  { to: '/users', label: 'Users', icon: 'users', show: isAdmin.value },
+  { to: '/', label: 'Dashboard', icon: 'dashboard', show: auth.can('dashboard') },
+  { to: '/devices', label: 'Devices', icon: 'devices', show: auth.can('devices') },
+  { to: '/control', label: 'Control', icon: 'control', show: auth.can('control') },
+  { to: '/map', label: 'GPS map', icon: 'map', show: auth.can('control') },
+  { to: '/tunnels', label: 'Tunnels', icon: 'tunnels', show: auth.can('tunnels') },
+  { to: '/sensors', label: 'Sensors', icon: 'sensors', show: auth.can('sensors') },
+  { to: '/groups', label: 'Groups', icon: 'groups', show: auth.can('groups') },
+  { to: '/reports', label: 'Reports', icon: 'reports', show: auth.can('reports') },
+  { to: '/alarms', label: 'Alarms', icon: 'alarms', show: auth.can('alarms'), badge: alarmCount },
+  { to: '/schedules', label: 'Schedules', icon: 'schedules', show: auth.can('schedules') },
+  { to: '/status', label: 'Status', icon: 'status', show: auth.can('status') },
+  { to: '/logs', label: 'Logs', icon: 'logs', show: auth.can('logs') },
+  { to: '/configuration', label: 'Configuration', icon: 'config', show: auth.can('configuration') },
+  { to: '/users', label: 'Users', icon: 'users', show: auth.can('users') },
 ].filter((l) => l.show));
 
 const pageTitle = computed(() => links.value.find((l) => l.to === route.path)?.label ?? 'Dashboard');
-
-const dark = ref(document.documentElement.dataset.theme === 'dark');
-function toggleTheme() {
-  dark.value = !dark.value;
-  const theme = dark.value ? 'dark' : 'light';
-  document.documentElement.dataset.theme = theme;
-  try { localStorage.setItem('theme', theme); } catch { /* ignore */ }
-}
-
 const initial = computed(() => (auth.user?.username ?? '?').charAt(0).toUpperCase());
 </script>
 
 <template>
   <div class="shell">
     <aside class="sidebar">
-      <div class="brand">
-        <div class="logo">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 00-4 12.7c.6.5 1 1.2 1 2V17h6v-.3c0-.8.4-1.5 1-2A7 7 0 0012 2z" /></svg>
-        </div>
-        <div>
-          <div class="brand-name">Highway LED</div>
-          <div class="brand-sub">Control &amp; Monitoring</div>
-        </div>
-      </div>
+      <router-link to="/" class="brand" aria-label="ARS Highway LED Control — home">
+        <BrandLogo :height="54" class="logo-full" />
+        <BrandLogo :height="26" class="logo-mini" />
+        <span class="brand-sub">Highway LED Control</span>
+      </router-link>
 
       <nav>
         <router-link v-for="l in links" :key="l.to" :to="l.to" class="nav-link">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path :d="icons[l.icon]" /></svg>
           <span>{{ l.label }}</span>
+          <b v-if="l.badge?.value" class="nav-badge">{{ l.badge.value }}</b>
         </router-link>
       </nav>
 
-      <div class="sidebar-foot">LoRa · MQTT · MySQL</div>
+      <div class="sidebar-foot"><CopyrightLine /></div>
     </aside>
 
     <div class="main-col">
       <header class="topbar">
         <h1>{{ pageTitle }}</h1>
         <div class="top-actions">
-          <button class="icon-btn" :title="dark ? 'Light theme' : 'Dark theme'" @click="toggleTheme">
-            <svg v-if="!dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z" /></svg>
-            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4l1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4m11.4-11.4l1.4-1.4" /></svg>
-          </button>
+          <router-link
+            v-if="auth.can('alarms')"
+            to="/alarms"
+            class="bell"
+            :class="{ hot: alarms.critical > 0, warm: alarms.critical === 0 && alarms.unacknowledged > 0 }"
+            :aria-label="alarms.unacknowledged ? alarms.unacknowledged + ' new alarms' : 'Alarms'"
+            :title="alarms.open ? alarms.open + ' open alarm(s)' : 'No open alarms'"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0" /></svg>
+            <b v-if="alarms.unacknowledged" class="bell-count">{{ alarms.unacknowledged > 99 ? '99+' : alarms.unacknowledged }}</b>
+          </router-link>
+          <ThemeToggle />
           <div class="user">
             <div class="avatar">{{ initial }}</div>
             <div class="user-meta">
@@ -89,6 +110,7 @@ const initial = computed(() => (auth.user?.username ?? '?').charAt(0).toUpperCas
       <main class="content">
         <router-view />
       </main>
+      <footer class="page-foot"><CopyrightLine /></footer>
     </div>
   </div>
 </template>
@@ -99,29 +121,26 @@ const initial = computed(() => (auth.user?.username ?? '?').charAt(0).toUpperCas
 .sidebar {
   width: 248px; flex: none; background: var(--sidebar-bg); color: var(--sidebar-text);
   display: flex; flex-direction: column; padding: 1.2rem 0.85rem; position: sticky; top: 0; height: 100vh;
+  border-right: 1px solid rgba(150, 160, 255, 0.12);
 }
-.brand { display: flex; align-items: center; gap: 0.75rem; padding: 0.25rem 0.5rem 1.4rem; }
-.logo {
-  width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; color: #fff;
-  background: linear-gradient(135deg, #f59e0b, #ef4444 60%, #ec4899);
-  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
-}
-.logo svg { width: 24px; height: 24px; }
-.brand-name { color: #fff; font-weight: 800; font-size: 1.05rem; }
-.brand-sub { font-size: 0.75rem; opacity: 0.75; }
+.brand { display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; padding: 0.35rem 0.6rem 1.3rem; text-decoration: none; }
+.brand:hover { text-decoration: none; }
+.logo-mini { display: none; }
+.brand-sub { color: var(--sidebar-text); font-size: 0.74rem; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; opacity: 0.85; }
 
 nav { display: flex; flex-direction: column; gap: 0.2rem; }
 .nav-link {
   display: flex; align-items: center; gap: 0.75rem; padding: 0.62rem 0.8rem; border-radius: 10px;
   color: var(--sidebar-text); font-weight: 600; transition: background 0.15s, color 0.15s;
 }
+.nav-link:hover { background: var(--sidebar-hover); color: #fff; text-decoration: none; }
 .nav-link svg { width: 20px; height: 20px; flex: none; }
-.nav-link:hover { background: rgba(255, 255, 255, 0.09); color: #fff; }
 .nav-link.router-link-exact-active {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08));
-  color: #fff; box-shadow: inset 3px 0 0 #fbbf24;
+  background: linear-gradient(90deg, rgba(150, 160, 255, 0.28), rgba(150, 160, 255, 0.08));
+  color: #fff; box-shadow: inset 3px 0 0 var(--sidebar-active-bar);
 }
-.sidebar-foot { margin-top: auto; font-size: 0.72rem; opacity: 0.55; text-align: center; padding-top: 1rem; }
+.nav-link:focus-visible { outline-color: #fff; }
+.sidebar-foot { margin-top: auto; padding: 1rem 0.4rem 0; font-size: 0.7rem; line-height: 1.4; text-align: center; opacity: 0.65; }
 
 .main-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .topbar {
@@ -130,26 +149,40 @@ nav { display: flex; flex-direction: column; gap: 0.2rem; }
   position: sticky; top: 0; z-index: 5;
 }
 .topbar h1 { font-size: 1.25rem; }
+.nav-badge { margin-left: auto; min-width: 20px; padding: 0 6px; height: 20px; border-radius: 999px; display: grid; place-items: center; font-size: 0.7rem; background: #ff5c7c; color: #0a1428; }
+.bell { position: relative; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 11px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-muted); }
+.bell:hover { color: var(--text); text-decoration: none; }
+.bell svg { width: 19px; height: 19px; }
+.bell.hot { color: var(--red-fg); background: var(--red-soft); border-color: transparent; }
+.bell.warm { color: var(--amber-fg); background: var(--amber-soft); border-color: transparent; }
+.bell-count { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; display: grid; place-items: center; font-size: 0.68rem; background: var(--red); color: #fff; }
 .top-actions { display: flex; align-items: center; gap: 0.9rem; }
-.icon-btn {
-  width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2);
-  color: var(--text); display: grid; place-items: center; cursor: pointer;
-}
-.icon-btn:hover { background: var(--primary-soft); color: var(--primary); }
-.icon-btn svg { width: 19px; height: 19px; }
 .user { display: flex; align-items: center; gap: 0.6rem; }
 .avatar {
-  width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800;
-  background: linear-gradient(135deg, var(--primary), var(--teal));
+  width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; color: var(--on-primary); font-weight: 800;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
 }
 .user-name { font-weight: 700; line-height: 1.1; margin-bottom: 0.15rem; }
-.content { padding: 1.6rem; max-width: 1400px; width: 100%; }
+.content { padding: 1.6rem; max-width: 1400px; width: 100%; flex: 1; }
+.page-foot { padding: 1rem 1.6rem 1.3rem; text-align: center; font-size: 0.78rem; color: var(--text-muted); border-top: 1px solid var(--border); }
+
+@media print {
+  .sidebar, .topbar, .page-foot { display: none !important; }
+  .content { padding: 0; max-width: none; }
+}
 
 @media (max-width: 860px) {
   .sidebar { width: 68px; padding-inline: 0.5rem; }
-  .brand > div:last-child, .nav-link span, .sidebar-foot { display: none; }
+  .brand { align-items: center; padding-inline: 0; }
+  .logo-full, .brand-sub, .nav-link span, .sidebar-foot { display: none; }
+  .nav-link { position: relative; }
+  .nav-badge { position: absolute; top: 2px; right: 4px; margin: 0; min-width: 16px; height: 16px; font-size: 0.62rem; padding: 0 4px; }
+  .logo-mini { display: block; }
   .nav-link { justify-content: center; }
   .user-meta { display: none; }
+  .topbar { padding-inline: 0.8rem; gap: 0.4rem 0.6rem; flex-wrap: wrap; }
+  .topbar h1 { font-size: 1.1rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .top-actions { gap: 0.5rem; margin-left: auto; }
   .content { padding: 1rem; }
 }
 </style>

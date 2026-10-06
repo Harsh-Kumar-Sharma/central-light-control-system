@@ -11,6 +11,12 @@ import { auditRouter } from './routes/audit.js';
 import { statusMonitoringRouter } from './routes/statusMonitoring.js';
 import { dashboardRouter } from './routes/dashboard.js';
 import { roadsRouter } from './routes/roads.js';
+import { schedulesRouter } from './routes/schedules.js';
+import { alarmsRouter } from './routes/alarms.js';
+import { reportsRouter } from './routes/reports.js';
+import { mapRouter } from './routes/map.js';
+import { sensorsRouter } from './routes/sensors.js';
+import { tunnelsRouter } from './routes/tunnels.js';
 
 // Express app configuration only — no listen(), no MQTT connect, no
 // background jobs. Kept separate from server.js so the test suite can
@@ -34,6 +40,12 @@ app.use('/api/audit', auditRouter);
 app.use('/api/status-monitoring', statusMonitoringRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/roads', roadsRouter);
+app.use('/api/schedules', schedulesRouter);
+app.use('/api/alarms', alarmsRouter);
+app.use('/api/reports', reportsRouter);
+app.use('/api/map', mapRouter);
+app.use('/api/sensors', sensorsRouter);
+app.use('/api/tunnels', tunnelsRouter);
 
 // Consistent error shape (SRS §9.1 conventions).
 app.use((err, req, res, next) => {

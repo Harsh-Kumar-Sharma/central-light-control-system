@@ -1,5 +1,55 @@
 import { apiClient } from './client.js';
 
+export const sensorsApi = {
+  latest: () => apiClient.get('/sensors/latest').then((r) => r.data),
+  history: (params) => apiClient.get('/sensors/history', { params }).then((r) => r.data),
+  rules: () => apiClient.get('/sensors/rules').then((r) => r.data.rules),
+  createRule: (payload) => apiClient.post('/sensors/rules', payload).then((r) => r.data),
+  updateRule: (id, payload) => apiClient.put('/sensors/rules/' + id, payload).then((r) => r.data),
+  removeRule: (id) => apiClient.delete('/sensors/rules/' + id).then((r) => r.data),
+};
+
+export const tunnelsApi = {
+  list: () => apiClient.get('/tunnels').then((r) => r.data.tunnels),
+  create: (payload) => apiClient.post('/tunnels', payload).then((r) => r.data),
+  update: (id, payload) => apiClient.put('/tunnels/' + id, payload).then((r) => r.data),
+  remove: (id) => apiClient.delete('/tunnels/' + id).then((r) => r.data),
+  setZones: (id, zones) => apiClient.put('/tunnels/' + id + '/zones', { zones }).then((r) => r.data),
+  setMode: (id, mode) => apiClient.post('/tunnels/' + id + '/mode', { mode }).then((r) => r.data),
+};
+
+export const mapApi = {
+  lights: () => apiClient.get('/map/lights').then((r) => r.data),
+  setPosition: (id, payload) => apiClient.put('/map/lights/' + id + '/position', payload).then((r) => r.data),
+  setRoadPath: (id, points) => apiClient.put('/map/roads/' + id + '/path', { points }).then((r) => r.data),
+};
+
+export const reportsApi = {
+  overview: (params) => apiClient.get('/reports/overview', { params }).then((r) => r.data),
+  settings: () => apiClient.get('/reports/settings').then((r) => r.data),
+  updateSettings: (payload) => apiClient.put('/reports/settings', payload).then((r) => r.data),
+  // Downloads a CSV through the authenticated client and hands it to the browser as a file.
+  async download(kind, params) {
+    const res = await apiClient.get('/reports/export', { params: { ...params, kind }, responseType: 'blob' });
+    const name = /filename="([^"]+)"/.exec(res.headers['content-disposition'] ?? '')?.[1] ?? kind + '.csv';
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
+};
+
+export const alarmsApi = {
+  summary: () => apiClient.get('/alarms/summary').then((r) => r.data),
+  list: (state = 'open') => apiClient.get('/alarms', { params: { state } }).then((r) => r.data.alarms),
+  acknowledge: (id) => apiClient.post('/alarms/' + id + '/acknowledge').then((r) => r.data),
+  acknowledgeAll: () => apiClient.post('/alarms/acknowledge-all').then((r) => r.data),
+};
+
 export const dashboardApi = {
   summary: () => apiClient.get('/dashboard/summary').then((r) => r.data),
 };
@@ -40,6 +90,7 @@ export const usersApi = {
   list: () => apiClient.get('/users').then((r) => r.data.users),
   create: (payload) => apiClient.post('/users', payload).then((r) => r.data),
   update: (id, payload) => apiClient.put(`/users/${id}`, payload).then((r) => r.data),
+  catalog: () => apiClient.get('/users/permission-catalog').then((r) => r.data),
 };
 
 export const statusMonitoringApi = {
@@ -54,4 +105,15 @@ export const roadsApi = {
   create: (payload) => apiClient.post('/roads', payload).then((r) => r.data),
   update: (id, payload) => apiClient.put(`/roads/${id}`, payload).then((r) => r.data),
   remove: (id) => apiClient.delete(`/roads/${id}`).then((r) => r.data),
+};
+
+export const schedulesApi = {
+  list: () => apiClient.get('/schedules').then((r) => r.data),
+  runs: () => apiClient.get('/schedules/runs').then((r) => r.data.runs),
+  settings: () => apiClient.get('/schedules/settings').then((r) => r.data),
+  updateSettings: (payload) => apiClient.put('/schedules/settings', payload).then((r) => r.data),
+  create: (payload) => apiClient.post('/schedules', payload).then((r) => r.data),
+  update: (id, payload) => apiClient.put('/schedules/' + id, payload).then((r) => r.data),
+  remove: (id) => apiClient.delete('/schedules/' + id).then((r) => r.data),
+  run: (id) => apiClient.post('/schedules/' + id + '/run').then((r) => r.data),
 };

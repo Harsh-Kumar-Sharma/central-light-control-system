@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { pool } from '../db/pool.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { subscribeTransmitter } from '../services/mqttService.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import {
@@ -32,7 +32,7 @@ function validateFields(f) {
 const blankToNull = (v) => (v === '' || v === undefined ? null : v);
 
 // GET /api/transmitters — all roles can view (SRS §8.2).
-transmittersRouter.get('/', requireAuth, asyncHandler(async (req, res) => {
+transmittersRouter.get('/', requireAuth, requirePermission('devices', 'view'), asyncHandler(async (req, res) => {
   const [rows] = await pool.query(
     `SELECT id, name, junction_location, network_id, lora_address, connection_mode, connectivity_type,
             ip_address, port, gateway, subnet_mask, lan_line_ending, status,
@@ -43,7 +43,7 @@ transmittersRouter.get('/', requireAuth, asyncHandler(async (req, res) => {
 }));
 
 // POST /api/transmitters — Admin only (SRS §8.2: Add Device = Admin).
-transmittersRouter.post('/', requireAuth, requireRole('Admin'), asyncHandler(async (req, res) => {
+transmittersRouter.post('/', requireAuth, requirePermission('devices', 'create'), asyncHandler(async (req, res) => {
   const b = req.body ?? {};
   if (!b.name) return bad(res, 'name is required');
   const invalid = validateFields(b);
@@ -76,7 +76,7 @@ const COLUMN_FOR = {
   subnetMask: 'subnet_mask', lanLineEnding: 'lan_line_ending', status: 'status',
 };
 
-transmittersRouter.put('/:id', requireAuth, requireRole('Admin'), asyncHandler(async (req, res) => {
+transmittersRouter.put('/:id', requireAuth, requirePermission('devices', 'edit'), asyncHandler(async (req, res) => {
   const b = req.body ?? {};
   const invalid = validateFields(b);
   if (invalid) return bad(res, invalid);
@@ -117,7 +117,7 @@ transmittersRouter.put('/:id', requireAuth, requireRole('Admin'), asyncHandler(a
 // DELETE /api/transmitters/:id — Admin only. Refuses when the transmitter
 // still has receivers or command history: the command log is the audit
 // trail (SRS §5.4) and must not be destroyed by a delete.
-transmittersRouter.delete('/:id', requireAuth, requireRole('Admin'), asyncHandler(async (req, res) => {
+transmittersRouter.delete('/:id', requireAuth, requirePermission('devices', 'delete'), asyncHandler(async (req, res) => {
   const [found] = await pool.query('SELECT id FROM transmitters WHERE id = ?', [req.params.id]);
   if (found.length === 0) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Transmitter not found' } });
 
@@ -143,7 +143,7 @@ const testLimiter = rateLimit({
   message: { error: { code: 'RATE_LIMITED', message: 'Too many tests, wait a minute' } },
 });
 
-transmittersRouter.post('/:id/test', requireAuth, requireRole('Admin', 'Operator'), testLimiter, asyncHandler(async (req, res) => {
+transmittersRouter.post('/:id/test', requireAuth, requirePermission('devices', 'test'), testLimiter, asyncHandler(async (req, res) => {
   const { action, message, commandId } = req.body ?? {};
   if (!['ping', 'port', 'send'].includes(action)) return bad(res, 'action must be ping, port or send');
 
@@ -202,7 +202,7 @@ function validateSavedCommand(b) {
 }
 const dupName = (res) => res.status(409).json({ error: { code: 'CONFLICT', message: 'This transmitter already has a command with that name' } });
 
-transmittersRouter.get('/:id/commands', requireAuth, requireRole('Admin', 'Operator'), asyncHandler(async (req, res) => {
+transmittersRouter.get('/:id/commands', requireAuth, requirePermission('devices', 'test'), asyncHandler(async (req, res) => {
   const [rows] = await pool.query(
     'SELECT id, name, command FROM transmitter_commands WHERE transmitter_id = ? ORDER BY id',
     [req.params.id]
@@ -210,7 +210,7 @@ transmittersRouter.get('/:id/commands', requireAuth, requireRole('Admin', 'Opera
   res.json({ commands: rows });
 }));
 
-transmittersRouter.post('/:id/commands', requireAuth, requireRole('Admin'), asyncHandler(async (req, res) => {
+transmittersRouter.post('/:id/commands', requireAuth, requirePermission('devices', 'edit'), asyncHandler(async (req, res) => {
   const v = validateSavedCommand(req.body ?? {});
   if (v.error) return bad(res, v.error);
   const [tx] = await pool.query('SELECT id FROM transmitters WHERE id = ?', [req.params.id]);
@@ -224,7 +224,7 @@ transmittersRouter.post('/:id/commands', requireAuth, requireRole('Admin'), asyn
   }
 }));
 
-transmittersRouter.put('/:id/commands/:commandId', requireAuth, requireRole('Admin'), asyncHandler(async (req, res) => {
+transmittersRouter.put('/:id/commands/:commandId', requireAuth, requirePermission('devices', 'edit'), asyncHandler(async (req, res) => {
   const v = validateSavedCommand(req.body ?? {});
   if (v.error) return bad(res, v.error);
   try {
@@ -240,7 +240,7 @@ transmittersRouter.put('/:id/commands/:commandId', requireAuth, requireRole('Adm
   }
 }));
 
-transmittersRouter.delete('/:id/commands/:commandId', requireAuth, requireRole('Admin'), asyncHandler(async (req, res) => {
+transmittersRouter.delete('/:id/commands/:commandId', requireAuth, requirePermission('devices', 'edit'), asyncHandler(async (req, res) => {
   const [result] = await pool.query('DELETE FROM transmitter_commands WHERE id = ? AND transmitter_id = ?', [req.params.commandId, req.params.id]);
   if (result.affectedRows === 0) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Saved command not found' } });
   res.json({ deleted: true });

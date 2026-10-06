@@ -2,6 +2,9 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
+import BrandLogo from '../components/BrandLogo.vue';
+import ThemeToggle from '../components/ThemeToggle.vue';
+import CopyrightLine from '../components/CopyrightLine.vue';
 
 const username = ref('');
 const password = ref('');
@@ -28,24 +31,31 @@ async function onSubmit() {
 <template>
   <div class="login-page">
     <section class="hero">
-      <div class="logo">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 00-4 12.7c.6.5 1 1.2 1 2V17h6v-.3c0-.8.4-1.5 1-2A7 7 0 0012 2z" /></svg>
+      <span class="orb orb-a" aria-hidden="true" />
+      <span class="orb orb-b" aria-hidden="true" />
+
+      <div class="hero-body">
+        <BrandLogo :height="112" />
+        <h1>Highway LED<br />Control &amp; Monitoring</h1>
+        <p>Control, group and monitor every highway light from one dashboard — over LoRa and MQTT.</p>
+        <ul>
+          <li>Live online / offline status</li>
+          <li>Brightness &amp; relay control</li>
+          <li>Road map with every light on it</li>
+          <li>Full command audit trail</li>
+        </ul>
       </div>
-      <h1>Highway LED<br />Control &amp; Monitoring</h1>
-      <p>Control, group and monitor every highway light from one dashboard — over LoRa and MQTT.</p>
-      <ul>
-        <li>Live online / offline status</li>
-        <li>Brightness &amp; relay control</li>
-        <li>Full command audit trail</li>
-      </ul>
+      <div class="hero-foot"><CopyrightLine /></div>
     </section>
 
     <section class="panel">
+      <div class="panel-top"><ThemeToggle /></div>
+
       <form class="card" @submit.prevent="onSubmit">
         <h2>Welcome back</h2>
         <p class="hint">Sign in to your account</p>
 
-        <div v-if="error" class="alert error">{{ error }}</div>
+        <div v-if="error" class="alert error" role="alert">{{ error }}</div>
 
         <div class="field">
           <label for="u">Username</label>
@@ -57,31 +67,47 @@ async function onSubmit() {
         </div>
         <button class="btn" type="submit" :disabled="loading">{{ loading ? 'Signing in…' : 'Sign in' }}</button>
       </form>
+
+      <div class="panel-foot"><CopyrightLine /></div>
     </section>
   </div>
 </template>
 
 <style scoped>
 .login-page { min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr; background: var(--bg); }
+
 .hero {
-  background: linear-gradient(145deg, #1e1b4b 0%, #4338ca 55%, #0ea5a4 130%); color: #fff;
-  display: flex; flex-direction: column; justify-content: center; padding: 3rem 4rem; gap: 1rem;
+  position: relative; overflow: hidden; background: var(--hero-bg); color: #fff;
+  display: flex; flex-direction: column; justify-content: space-between; padding: 3rem 4rem 1.6rem;
 }
-.logo {
-  width: 62px; height: 62px; border-radius: 18px; display: grid; place-items: center;
-  background: linear-gradient(135deg, #f59e0b, #ef4444 60%, #ec4899); box-shadow: 0 10px 28px rgba(239, 68, 68, 0.45);
+.hero-body { position: relative; display: flex; flex-direction: column; gap: 1.1rem; margin: auto 0; padding: 2rem 0; }
+.hero h1 { font-size: 2.3rem; line-height: 1.15; margin-top: 0.6rem; }
+.hero p { margin: 0; max-width: 430px; font-size: 1.05rem; color: #d6dcff; }
+.hero ul { list-style: none; padding: 0; margin: 0.4rem 0 0; display: flex; flex-direction: column; gap: 0.55rem; color: #e6eaff; }
+.hero li::before {
+  content: '✓'; display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 0.65rem;
+  border-radius: 50%; background: rgba(70, 165, 255, 0.28); color: #bfe0ff; font-size: 0.78rem;
 }
-.logo svg { width: 34px; height: 34px; }
-.hero h1 { font-size: 2.3rem; line-height: 1.15; }
-.hero p { opacity: 0.85; max-width: 420px; margin: 0; font-size: 1.05rem; }
-.hero ul { list-style: none; padding: 0; margin: 0.6rem 0 0; display: flex; flex-direction: column; gap: 0.5rem; }
-.hero li::before { content: '✓'; display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 0.6rem; border-radius: 50%; background: rgba(255, 255, 255, 0.2); font-size: 0.8rem; }
-.panel { display: grid; place-items: center; padding: 2rem; }
-form.card { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 1rem; padding: 2rem; margin: 0; }
+.hero-foot { position: relative; font-size: 0.78rem; color: #aab4ee; }
+.orb { position: absolute; border-radius: 50%; pointer-events: none; }
+.orb-a { width: 420px; height: 420px; right: -140px; top: -120px; background: radial-gradient(circle, rgba(70, 165, 255, 0.35), transparent 68%); }
+.orb-b { width: 360px; height: 360px; left: -120px; bottom: -140px; background: radial-gradient(circle, rgba(150, 160, 255, 0.28), transparent 68%); }
+
+.panel { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4.2rem 2rem 4rem; }
+.panel-top { position: absolute; top: 1.1rem; right: 1.3rem; }
+.panel-foot { display: none; position: absolute; bottom: 1.2rem; left: 0; right: 0; text-align: center; font-size: 0.78rem; color: var(--text-muted); }
+form.card { width: 100%; max-width: 390px; display: flex; flex-direction: column; gap: 1rem; padding: 2rem; margin: 0; }
+form.card h2 { font-size: 1.35rem; }
 form.card .hint { margin: -0.6rem 0 0; }
+
 @media (max-width: 800px) {
   .login-page { grid-template-columns: 1fr; }
-  .hero { padding: 2rem; }
-  .hero ul { display: none; }
+  .hero { padding: 1.6rem 1.6rem 1rem; }
+  .hero-body { padding: 0.4rem 0; gap: 0.7rem; }
+  .hero h1 { font-size: 1.5rem; }
+  .hero ul, .hero p { display: none; }
+  .hero-foot { display: none; }
+  .panel-foot { display: block; }
+  .panel { padding: 3.6rem 1.2rem 3.6rem; }
 }
 </style>

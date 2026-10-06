@@ -5,7 +5,8 @@ import { useAuthStore } from '../stores/auth.js';
 import { badgeClass } from '../utils/status.js';
 
 const auth = useAuthStore();
-const isAdmin = computed(() => auth.role === 'Admin');
+const isAdmin = computed(() => auth.can('groups', 'create'));
+const canSend = computed(() => auth.can('groups', 'control')); // "Send to group"
 
 const groups = ref([]);
 const devices = ref([]);
@@ -42,7 +43,8 @@ async function sendGroupBrightness() {
   try {
     groupResult.value = await groupsApi.sendCommand(selectedGroupId.value, { type: 'brightness', value: Number(brightness.value) });
   } catch (err) {
-    error.value = err.response?.data?.error ?? err.response?.data?.message ?? 'Group command failed';
+    const data = err.response?.data;
+    error.value = data?.error?.message ?? data?.message ?? (typeof data?.error === 'string' ? data.error : 'Group command failed');
   }
 }
 
@@ -78,7 +80,7 @@ onMounted(load);
       <p v-if="isAdmin" class="hint">Hold Ctrl / Cmd to select several devices.</p>
     </div>
 
-    <div class="card">
+    <div v-if="canSend" class="card">
       <div class="card-title"><h2>Group control</h2></div>
       <div class="form-row first">
         <select v-model="selectedGroupId">
@@ -107,6 +109,7 @@ onMounted(load);
         </div>
       </div>
     </div>
+    <p v-else class="hint">You have view-only access to groups. Ask an Admin for the "Send to group" permission to control them.</p>
   </div>
 </template>
 

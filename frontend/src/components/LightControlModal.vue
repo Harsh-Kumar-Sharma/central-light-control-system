@@ -174,8 +174,6 @@ async function refresh() {
 <style scoped>
 .meta { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
 .seen { color: var(--text-muted); font-size: 0.82rem; }
-.alert.warn { background: var(--amber-soft); color: #92620f; }
-.alert.info { background: var(--blue-soft); color: var(--blue); }
 
 .relays { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; }
 .relay { border: 1px solid var(--border); border-left-width: 5px; border-radius: var(--radius-sm); padding: 0.85rem 1rem; background: var(--surface-2); }

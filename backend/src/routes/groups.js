@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import { pool } from '../db/pool.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requirePermission } from '../middleware/auth.js';
 import { sendGroupCommand } from '../services/commandService.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 
 export const groupsRouter = Router();
 
 // GET /api/groups — all roles can view.
-groupsRouter.get('/', requireAuth, asyncHandler(async (req, res) => {
+groupsRouter.get('/', requireAuth, requirePermission('groups', 'view'), asyncHandler(async (req, res) => {
   const [rows] = await pool.query(
     `SELECT g.id, g.name, COUNT(gm.receiver_id) AS member_count
      FROM \`groups\` g LEFT JOIN group_members gm ON gm.group_id = g.id
@@ -17,7 +17,7 @@ groupsRouter.get('/', requireAuth, asyncHandler(async (req, res) => {
 }));
 
 // POST /api/groups — Admin only (SRS §17 Group Management).
-groupsRouter.post('/', requireAuth, requireRole('Admin'), asyncHandler(async (req, res) => {
+groupsRouter.post('/', requireAuth, requirePermission('groups', 'create'), asyncHandler(async (req, res) => {
   const { name, deviceIds } = req.body ?? {};
   if (!name) {
     return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'name is required' } });
@@ -36,7 +36,7 @@ groupsRouter.post('/', requireAuth, requireRole('Admin'), asyncHandler(async (re
 
 // POST /api/groups/:id/commands — FR-GRP (SRS §5.2). Same role gate as
 // individual device control.
-groupsRouter.post('/:id/commands', requireAuth, requireRole('Admin', 'Operator'), asyncHandler(async (req, res) => {
+groupsRouter.post('/:id/commands', requireAuth, requirePermission('groups', 'control'), asyncHandler(async (req, res) => {
   const { type, value, state } = req.body ?? {};
   if (!type) {
     return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'type is required' } });

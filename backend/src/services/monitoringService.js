@@ -1,4 +1,5 @@
 import { pool } from '../db/pool.js';
+import { raiseDeviceOffline } from './alarmService.js';
 
 // FR-ONOFF (SRS §6.4): combines last-seen timestamp against the configured
 // offline threshold to determine online/offline state. This is explicitly
@@ -37,14 +38,11 @@ export function startOfflineSweep() {
       const config = await getSystemMonitoringConfig();
       if (!config?.enabled || !config.offline_threshold_seconds) return;
 
-      await pool.query(
-        `UPDATE device_status
-         SET online = FALSE
-         WHERE online = TRUE
-           AND last_seen IS NOT NULL
-           AND last_seen < DATE_SUB(NOW(), INTERVAL ? SECOND)`,
-        [config.offline_threshold_seconds]
-      );
+      const stale = `online = TRUE AND last_seen IS NOT NULL AND last_seen < DATE_SUB(NOW(), INTERVAL ? SECOND)`;
+      const [going] = await pool.query(`SELECT receiver_id FROM device_status WHERE ${stale}`, [config.offline_threshold_seconds]);
+      await pool.query(`UPDATE device_status SET online = FALSE WHERE ${stale}`, [config.offline_threshold_seconds]);
+      for (const { receiver_id: id } of going) await pool.query('INSERT INTO light_state_log (receiver_id, online, relay1, relay2, brightness) SELECT receiver_id, online, relay1, relay2, brightness FROM device_status WHERE receiver_id = ?', [id]).catch(() => {});
+      for (const { receiver_id: id } of going) await raiseDeviceOffline(id).catch((err) => console.error('Alarm raise failed:', err.message));
     } catch (err) {
       console.error('Offline sweep failed:', err.message);
     }

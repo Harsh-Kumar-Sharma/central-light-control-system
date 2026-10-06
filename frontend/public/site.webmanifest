@@ -1,0 +1,16 @@
+{
+  "name": "ARS Highway LED Control",
+  "short_name": "ARS LED",
+  "description": "Highway LED lighting control and monitoring by ARS Private Limited",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#192496",
+  "icons": [
+    { "src": "/brand/app-icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/app-icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/app-icons/maskable-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/brand/app-icons/maskable-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

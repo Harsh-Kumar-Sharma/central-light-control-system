@@ -8,7 +8,7 @@ const props = defineProps({ transmitter: { type: Object, required: true } });
 const emit = defineEmits(['close', 'tested']);
 
 const auth = useAuthStore();
-const isAdmin = computed(() => auth.role === 'Admin');
+const isAdmin = computed(() => auth.can('devices', 'edit')); // saved-command editing
 
 const port = ref(props.transmitter.port ?? '');
 const busy = ref('');
