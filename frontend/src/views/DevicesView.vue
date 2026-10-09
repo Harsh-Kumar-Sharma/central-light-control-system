@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { transmittersApi, devicesApi } from '../api/resources.js';
 import { useAuthStore } from '../stores/auth.js';
 import Modal from '../components/Modal.vue';
@@ -26,6 +26,7 @@ const icons = {
 async function load() {
   try {
     [transmitters.value, devices.value] = await Promise.all([transmittersApi.list(), devicesApi.list()]);
+    if (testTx.value) testTx.value = transmitters.value.find((t) => t.id === testTx.value.id) ?? null;
   } catch (err) {
     error.value = err.response?.data?.error?.message ?? 'Failed to load devices';
   }
@@ -34,7 +35,15 @@ async function load() {
 // Connection badge: reflects the last ping / port check, NOT the record's
 // Enabled flag (a wrong IP must never show up green).
 function connection(t) {
-  if (t.connection_mode === 'mqtt') return { cls: 'gray', text: 'MQTT (coming soon)', title: '' };
+  if (t.connection_mode === 'mqtt') {
+    const m = t.mqtt;
+    if (!m?.configured) return { cls: 'gray', text: 'Default broker', title: 'No broker set on this transmitter: the server\'s default MQTT broker is used' };
+    if (m.state === 'connected') return { cls: 'green', text: 'Connected', title: `Connected to the broker${m.last_message_at ? ` · last message ${new Date(m.last_message_at).toLocaleTimeString()}` : ''}` };
+    if (m.state === 'connecting') return { cls: 'amber', text: 'Connecting…', title: m.error ?? 'Reaching the broker' };
+    if (m.state === 'error') return { cls: 'red', text: 'Can\'t connect', title: m.error ?? 'Broker not reachable' };
+    if (m.state === 'off') return { cls: 'gray', text: 'Disabled', title: 'This transmitter is switched off' };
+    return { cls: 'gray', text: 'Not connected yet', title: 'It connects on the first command or test' };
+  }
   if (t.last_test_ok === null || t.last_test_ok === undefined) return { cls: 'gray', text: 'Not tested', title: 'Use the Test button' };
   const when = t.last_test_at ? new Date(t.last_test_at).toLocaleString() : '';
   return t.last_test_ok
@@ -49,12 +58,14 @@ const txModal = reactive({ open: false, editingId: null, saving: false, error: '
 const txForm = reactive({
   name: '', junctionLocation: '', networkId: '', loraAddress: '', connectionMode: 'lan',
   ipAddress: '', port: '', gateway: '', subnetMask: '', lanLineEnding: 'none', enabled: true,
+  mqttHost: '', mqttPort: '', mqttPublishTopic: '', mqttSubscribeTopic: '',
 });
 
 function openAddTx() {
   Object.assign(txForm, {
     name: '', junctionLocation: '', networkId: '', loraAddress: '', connectionMode: 'lan',
     ipAddress: '', port: '', gateway: '', subnetMask: '', lanLineEnding: 'none', enabled: true,
+    mqttHost: '', mqttPort: '', mqttPublishTopic: '', mqttSubscribeTopic: '',
   });
   Object.assign(txModal, { open: true, editingId: null, saving: false, error: '' });
 }
@@ -64,6 +75,7 @@ function openEditTx(t) {
     name: t.name, junctionLocation: t.junction_location ?? '', networkId: t.network_id ?? '', loraAddress: t.lora_address ?? '',
     connectionMode: t.connection_mode, ipAddress: t.ip_address ?? '', port: t.port ?? '', gateway: t.gateway ?? '',
     subnetMask: t.subnet_mask ?? '', lanLineEnding: t.lan_line_ending ?? 'none', enabled: t.status === 'active',
+    mqttHost: t.mqtt_host ?? '', mqttPort: t.mqtt_port ?? '', mqttPublishTopic: t.mqtt_publish_topic ?? '', mqttSubscribeTopic: t.mqtt_subscribe_topic ?? '',
   });
   Object.assign(txModal, { open: true, editingId: t.id, saving: false, error: '' });
 }
@@ -84,6 +96,10 @@ async function saveTx() {
     gateway: txForm.gateway,
     subnetMask: txForm.subnetMask,
     lanLineEnding: txForm.lanLineEnding,
+    mqttHost: txForm.mqttHost.trim(),
+    mqttPort: numOrNull(txForm.mqttPort),
+    mqttPublishTopic: txForm.mqttPublishTopic.trim(),
+    mqttSubscribeTopic: txForm.mqttSubscribeTopic.trim(),
   };
   try {
     if (txModal.editingId) {
@@ -196,7 +212,15 @@ async function confirmDelete() {
   }
 }
 
-onMounted(load);
+// MQTT connections change by themselves (broker up/down, a message arrives): refresh while the page is open.
+let poll = null;
+onMounted(() => {
+  load();
+  poll = setInterval(() => {
+    if (!document.hidden && transmitters.value.some((t) => t.connection_mode === 'mqtt') && !txModal.open && !rxModal.open) load();
+  }, 5000);
+});
+onBeforeUnmount(() => clearInterval(poll));
 </script>
 
 <template>
@@ -210,7 +234,7 @@ onMounted(load);
         <button v-if="canAdd" class="btn" @click="openAddTx">+ Add transmitter</button>
       </div>
       <p class="hint">
-        <strong>Connection</strong> shows the result of the last Ping / Port test.
+        <strong>Connection</strong> shows the result of the last Ping / Port test (LAN) or the live connection to the broker (MQTT).
         <strong>Enabled</strong> only says whether this record is switched on — it does not mean the device is reachable.
       </p>
       <div class="table-wrap">
@@ -232,13 +256,18 @@ onMounted(load);
                   <strong>{{ t.ip_address ?? '—' }}</strong><span v-if="t.port">:{{ t.port }}</span>
                   <div class="sub">gw {{ orDash(t.gateway) }} · mask {{ orDash(t.subnet_mask) }}</div>
                 </template>
-                <span v-else class="sub">—</span>
+                <template v-else-if="t.mqtt_host">
+                  <strong>{{ t.mqtt_host }}</strong>:{{ t.mqtt_port ?? 1883 }}
+                  <div class="sub" :title="'Commands go to ' + t.mqtt_publish_topic">↑ {{ t.mqtt_publish_topic }}</div>
+                  <div class="sub" :title="'Replies come from ' + t.mqtt_subscribe_topic">↓ {{ t.mqtt_subscribe_topic }}</div>
+                </template>
+                <span v-else class="sub">server's default broker</span>
               </td>
               <td>{{ orDash(t.lora_address) }}</td>
               <td><span class="badge" :class="connection(t).cls" :title="connection(t).title">{{ connection(t).text }}</span></td>
               <td><span class="badge" :class="t.status === 'active' ? 'green' : 'gray'">{{ t.status === 'active' ? 'Enabled' : 'Disabled' }}</span></td>
               <td v-if="canTest" class="acts">
-                <button class="act" title="Test connection" :disabled="t.connection_mode !== 'lan'" @click="testTx = t">
+                <button class="act" title="Test connection" @click="testTx = t">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path :d="icons.test" /></svg>
                 </button>
                 <button v-if="canEdit" class="act" title="Edit" @click="openEditTx(t)">
@@ -299,7 +328,7 @@ onMounted(load);
           <label>Connection mode</label>
           <div class="seg">
             <button type="button" :class="{ on: txForm.connectionMode === 'lan' }" @click="txForm.connectionMode = 'lan'">LAN (Ethernet / Wi-Fi)</button>
-            <button type="button" disabled title="MQTT mode is coming next">MQTT · coming soon</button>
+            <button type="button" :class="{ on: txForm.connectionMode === 'mqtt' }" @click="txForm.connectionMode = 'mqtt'">MQTT (broker)</button>
           </div>
         </div>
 
@@ -322,6 +351,24 @@ onMounted(load);
             </select>
           </div>
           <p class="hint full">These record how the device is configured. They are not pushed to the device; use <strong>Test</strong> to check it is reachable.</p>
+        </template>
+
+        <template v-else>
+          <div class="field"><label>Broker host *</label><input v-model="txForm.mqttHost" placeholder="IP or host name, e.g. 192.168.1.20 or broker.example.com" required /></div>
+          <div class="field"><label>Broker port</label><input v-model="txForm.mqttPort" type="number" min="1" max="65535" placeholder="1883" /></div>
+          <div class="field full">
+            <label>Command topic * <span class="muted">(control room → device: we publish here)</span></label>
+            <input v-model="txForm.mqttPublishTopic" class="mono" maxlength="255" placeholder="e.g. ars/junction1/cmd" required />
+          </div>
+          <div class="field full">
+            <label>Reply topic * <span class="muted">(device → control room: we listen here)</span></label>
+            <input v-model="txForm.mqttSubscribeTopic" class="mono" maxlength="255" placeholder="e.g. ars/junction1/reply" required />
+          </div>
+          <p class="hint full">
+            Use the same four settings the device is configured with. The port is 1883 unless you change it.
+            Commands such as <code>Tx_1_R1ON</code> are published on the command topic and the answer is read from the reply topic.
+            After saving, use <strong>Test</strong> to check the connection.
+          </p>
         </template>
 
         <label v-if="txModal.editingId" class="check full"><input v-model="txForm.enabled" type="checkbox" /> Enabled (record is switched on)</label>

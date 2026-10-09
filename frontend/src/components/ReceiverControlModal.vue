@@ -19,7 +19,7 @@ const addr = computed(() => props.receiver.lora_address);
 const via = computed(() => {
   const t = props.transmitter;
   if (!t) return 'unknown transmitter';
-  if (t.connection_mode !== 'lan') return 'MQTT';
+  if (t.connection_mode !== 'lan') return t.mqtt_host ? `MQTT ${t.mqtt_host}:${t.mqtt_port ?? 1883}` : 'MQTT (default broker)';
   return t.ip_address && t.port ? `LAN ${t.ip_address}:${t.port}` : 'LAN — IP / port not set';
 });
 const ready = computed(() => props.receiver.status === 'active' && props.transmitter?.status === 'active');

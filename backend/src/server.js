@@ -5,6 +5,7 @@ import { startOfflineSweep } from './services/monitoringService.js';
 import { startStatusPolling, backfillStateLog } from './services/deviceStatusService.js';
 import { startScheduler } from './services/scheduleService.js';
 import { startSensorMaintenance } from './services/sensorService.js';
+import { startAllLinks } from './services/mqttLinks.js';
 
 // Defense-in-depth: log and keep running rather than let a missed .catch()
 // anywhere (route handlers are covered by asyncHandler; this covers
@@ -20,7 +21,11 @@ backfillStateLog();
 startOfflineSweep();
 // Set DISABLE_STATUS_POLLING=true on any extra instance (a second dev server, a test
 // run) so only ONE backend polls the devices.
-if (process.env.DISABLE_STATUS_POLLING !== 'true') startStatusPolling();
+if (process.env.DISABLE_STATUS_POLLING !== 'true') {
+  startStatusPolling();
+  // Open each MQTT transmitter's own broker connection now (an extra instance opens one only when it needs it).
+  startAllLinks().catch((err) => console.error('Could not open the MQTT transmitter connections:', err.message));
+}
 // Same rule for the scheduler: two backends would each switch the lights.
 if (process.env.DISABLE_STATUS_POLLING !== 'true' && process.env.DISABLE_SCHEDULER !== 'true') startScheduler();
 

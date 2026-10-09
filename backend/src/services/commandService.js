@@ -4,6 +4,8 @@ import { isAllowedTestTarget, isValidPort, sendTcpMessage } from './deviceTestSe
 import { withTransmitterLock } from './transmitterLock.js';
 import { applyStatus, stateFromCommand } from './deviceStatusService.js';
 import { parseAckReply, isReplyComplete } from './statusParser.js';
+import * as mqttLinks from './mqttLinks.js';
+import { mqttConfigOf } from './mqttConfig.js';
 
 // Every outcome carries a commandId (even a rejected one — that's the point
 // of the audit trail, SRS §5.4), so routes must not use "has a commandId"
@@ -65,7 +67,8 @@ export async function sendCommand({ userId, userRole, receiverId, type, payload 
   const [receivers] = await pool.query(
     `SELECT r.id, r.lora_address, r.parent_transmitter_id, r.status AS receiver_status,
             t.lora_address AS transmitter_address, t.status AS transmitter_status,
-            t.connection_mode, t.ip_address, t.port, t.lan_line_ending
+            t.connection_mode, t.ip_address, t.port, t.lan_line_ending,
+            t.mqtt_host, t.mqtt_port, t.mqtt_publish_topic, t.mqtt_subscribe_topic
      FROM receivers r JOIN transmitters t ON t.id = r.parent_transmitter_id
      WHERE r.id = ?`,
     [receiverId]
@@ -101,6 +104,10 @@ export async function sendCommand({ userId, userRole, receiverId, type, payload 
   const base = { commandId, receiverId: receiver.id, commandString: built.commandString, transport };
 
   if (transport === 'lan') return deliverOverLan({ base, receiver, built });
+  // MQTT with the transmitter's own broker settings: publish, then wait for the reply (like LAN).
+  const mqttCfg = mqttConfigOf(receiver);
+  if (mqttCfg) return deliverOverMqtt({ base, receiver, built, cfg: mqttCfg });
+  // MQTT with no settings of its own: the server's default broker, fire-and-forget as before.
 
   try {
     await publishCommand(receiver.transmitter_address, built.commandString);
@@ -133,7 +140,18 @@ async function deliverOverLan({ base, receiver, built }) {
   const text = commandString + (LINE_ENDINGS[receiver.lan_line_ending] ?? '');
   const r = await withTransmitterLock(receiver.parent_transmitter_id, () => sendTcpMessage(receiver.ip_address, receiver.port, text, LAN_REPLY_TIMEOUT_MS, { isComplete: isReplyComplete, settleMs: 700 }));
 
-  if (!r.connected) return failCommand(commandId, base, 'TRANSMITTER_OFFLINE', `Cannot reach transmitter at ${receiver.ip_address}:${receiver.port} (${r.detail})`);
+  return finishDelivery({ base, receiver, built, r, where: `${receiver.ip_address}:${receiver.port}` });
+}
+
+async function deliverOverMqtt({ base, receiver, built, cfg }) {
+  const r = await withTransmitterLock(receiver.parent_transmitter_id, () => mqttLinks.request(receiver.parent_transmitter_id, cfg, base.commandString, { timeoutMs: LAN_REPLY_TIMEOUT_MS, isComplete: isReplyComplete, settleMs: 700 }));
+  return finishDelivery({ base, receiver, built, r, where: `the MQTT broker ${cfg.host}:${cfg.port}` });
+}
+
+// What a reply means - the same for LAN and MQTT. r = { ok, connected, received, latencyMs, detail }.
+async function finishDelivery({ base, receiver, built, r, where }) {
+  const { commandId } = base;
+  if (!r.connected) return failCommand(commandId, base, 'TRANSMITTER_OFFLINE', `Cannot reach transmitter at ${where} (${r.detail})`);
   await pool.query("UPDATE commands SET status = 'SENT_TO_TRANSMITTER' WHERE id = ?", [commandId]);
   if (!r.ok) return failCommand(commandId, base, 'NO_ACK', r.detail);
 

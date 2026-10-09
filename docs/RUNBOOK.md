@@ -219,3 +219,33 @@ DWG reader.
 **Full screen / mini map.** The full-screen button uses the browser's real full screen and falls back to filling the
 window where the browser refuses it. The floating mini map (pin it from Plans or the plan page) is remembered per
 browser (`localStorage.miniPlan`), follows you across pages, and is hidden on narrow screens.
+
+## 9. MQTT transmitters (own broker per transmitter)
+
+A transmitter set to **MQTT (broker)** carries four settings, the same ones configured inside the device:
+
+| Setting | Meaning |
+|---|---|
+| Broker host | IP address or host name of the MQTT broker (no `mqtt://`, no port) |
+| Broker port | default **1883**, changeable |
+| Command topic | control room → device: commands such as `Tx_1_R1ON` are published here |
+| Reply topic | device → control room: the server listens here for the ACK / status |
+
+**How it works** (`backend/src/services/mqttLinks.js`): one connection per MQTT transmitter, opened when the transmitter is
+saved, at start-up, or on first use, and re-opened by itself if the broker drops. A command is published on the command topic
+and the answer is read from the reply topic - the same request/answer cycle as LAN - so command ACKs (`SUCCESS` / `ACKNOWLEDGED` /
+`NO_ACK`), the status command polling and "Refresh status" all work over MQTT. A message the device sends on its own that names its
+receiver (`"source"` or an `ACK` line) updates that light. Retained (old) messages are never taken as an answer.
+
+**Test** (Devices → Test on the transmitter): *Test MQTT connection* opens the connection and subscribes to the reply topic,
+*Check broker port* only checks that the port is open, and the saved-command buttons / custom text publish and show the reply.
+The Devices table shows the live state (Connected / Connecting / Can't connect + the reason).
+
+**Notes**
+- A transmitter in MQTT mode with *no* host keeps using the server's default broker (`MQTT_URL`, `esp/sub|pub/<address>`), as before.
+- No username/password is stored per transmitter. If it points at the same broker as `MQTT_URL`, the server's `MQTT_USERNAME` /
+  `MQTT_PASSWORD` are used; otherwise the connection is anonymous. A broker that requires a login will show "Not authorized".
+- No TLS (`mqtts://`) yet; plain MQTT only.
+- Broker hosts are not limited to the private network (a cloud broker is fine); only users with `devices.edit` can set them.
+- Same rule as LAN: run **one** backend against a device (`DISABLE_STATUS_POLLING=true` on an extra instance stops it opening the
+  start-up connections, and it then connects only when it has to send something).

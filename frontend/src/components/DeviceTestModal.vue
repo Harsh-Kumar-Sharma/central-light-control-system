@@ -10,11 +10,16 @@ const emit = defineEmits(['close', 'tested']);
 const auth = useAuthStore();
 const isAdmin = computed(() => auth.can('devices', 'edit')); // saved-command editing
 
-const port = ref(props.transmitter.port ?? '');
+const isMqtt = computed(() => props.transmitter.connection_mode === 'mqtt');
+const mqttReady = computed(() => !!(props.transmitter.mqtt_host && props.transmitter.mqtt_publish_topic && props.transmitter.mqtt_subscribe_topic));
+const port = ref((props.transmitter.connection_mode === 'mqtt' ? (props.transmitter.mqtt_port ?? 1883) : props.transmitter.port) ?? '');
 const busy = ref('');
 const log = ref([]);
 const logEl = ref(null);
-const usable = computed(() => props.transmitter.connection_mode === 'lan' && !!props.transmitter.ip_address);
+const usable = computed(() => (isMqtt.value ? mqttReady.value : props.transmitter.connection_mode === 'lan' && !!props.transmitter.ip_address));
+// LAN needs a port to talk to; MQTT already has everything it needs.
+const canSend = computed(() => !busy.value && (isMqtt.value || !!port.value));
+const heard = computed(() => props.transmitter.mqtt?.last_message ?? null);
 
 function add(kind, text) {
   log.value.push({ kind, text, time: new Date().toLocaleTimeString() });
@@ -25,9 +30,9 @@ function add(kind, text) {
 async function runCheck(action) {
   if (busy.value) return;
   busy.value = action;
-  const ip = props.transmitter.ip_address;
+  const ip = isMqtt.value ? props.transmitter.mqtt_host : props.transmitter.ip_address;
   try {
-    add('out', action === 'ping' ? `ping ${ip} …` : `connect ${ip}:${port.value} …`);
+    add('out', action === 'ping' ? `ping ${ip} …` : action === 'connect' ? `connecting to the MQTT broker ${ip}:${props.transmitter.mqtt_port ?? 1883} …` : `check ${ip}:${port.value} …`);
     const r = await transmittersApi.test(props.transmitter.id, { action, port: port.value === '' ? undefined : Number(port.value) });
     add(r.ok ? 'ok' : 'err', r.ok ? `${r.detail}${r.latencyMs != null ? ` · ${r.latencyMs} ms` : ''}` : r.detail);
     emit('tested');
@@ -134,22 +139,43 @@ async function sendCustom() {
   <Modal :title="`Test connection — ${transmitter.name}`" width="720px" @close="emit('close')">
     <div class="target">
       <span class="badge blue">{{ transmitter.connection_mode.toUpperCase() }}</span>
-      <strong>{{ transmitter.ip_address ?? 'no IP set' }}</strong>
-      <span v-if="transmitter.gateway" class="muted">gateway {{ transmitter.gateway }}</span>
+      <template v-if="isMqtt">
+        <strong>{{ transmitter.mqtt_host ?? 'no broker set' }}<template v-if="transmitter.mqtt_host">:{{ transmitter.mqtt_port ?? 1883 }}</template></strong>
+        <span v-if="transmitter.mqtt?.state === 'connected'" class="badge green">connected</span>
+        <span v-else-if="transmitter.mqtt?.state === 'error'" class="badge red" :title="transmitter.mqtt.error">can't connect</span>
+        <span v-else-if="transmitter.mqtt?.state === 'connecting'" class="badge amber">connecting…</span>
+        <span v-else class="badge gray">not connected yet</span>
+      </template>
+      <template v-else>
+        <strong>{{ transmitter.ip_address ?? 'no IP set' }}</strong>
+        <span v-if="transmitter.gateway" class="muted">gateway {{ transmitter.gateway }}</span>
+      </template>
+    </div>
+    <div v-if="isMqtt && mqttReady" class="topics">
+      <div><span class="arrow">↑</span> commands go to <code>{{ transmitter.mqtt_publish_topic }}</code></div>
+      <div><span class="arrow">↓</span> replies come from <code>{{ transmitter.mqtt_subscribe_topic }}</code></div>
+      <div v-if="transmitter.mqtt?.state === 'error' && transmitter.mqtt.error" class="bad">{{ transmitter.mqtt.error }}</div>
+      <div v-if="heard" class="muted">Last message heard: <code>{{ heard }}</code></div>
     </div>
 
     <div v-if="!usable" class="alert error">
-      LAN tests need this transmitter to be in LAN mode with an IP address. Edit it first.
+      {{ isMqtt ? 'MQTT tests need the broker host and both topics. Edit this transmitter first.' : 'LAN tests need this transmitter to be in LAN mode with an IP address. Edit it first.' }}
     </div>
 
     <template v-else>
       <section>
-        <h3>1 · Network check</h3>
-        <p class="hint">Ping the device, and check that its software is listening on a port.</p>
-        <div class="row">
+        <h3>1 · {{ isMqtt ? 'Connection check' : 'Network check' }}</h3>
+        <p v-if="!isMqtt" class="hint">Ping the device, and check that its software is listening on a port.</p>
+        <p v-else class="hint">Open the MQTT connection (and subscribe to the reply topic), or just check that the broker's port is open.</p>
+        <div v-if="!isMqtt" class="row">
           <button class="btn" :disabled="!!busy" @click="runCheck('ping')">{{ busy === 'ping' ? 'Pinging…' : 'Ping' }}</button>
           <input v-model="port" type="number" min="1" max="65535" placeholder="Port" class="port" />
           <button class="btn secondary" :disabled="!!busy || !port" @click="runCheck('port')">{{ busy === 'port' ? 'Checking…' : 'Check port' }}</button>
+        </div>
+        <div v-else class="row">
+          <button class="btn" data-action="mqtt-connect" :disabled="!!busy" @click="runCheck('connect')">{{ busy === 'connect' ? 'Connecting…' : 'Test MQTT connection' }}</button>
+          <input v-model="port" type="number" min="1" max="65535" placeholder="Port" class="port" />
+          <button class="btn secondary" :disabled="!!busy || !port" @click="runCheck('port')">{{ busy === 'port' ? 'Checking…' : 'Check broker port' }}</button>
         </div>
       </section>
 
@@ -176,7 +202,7 @@ async function sendCustom() {
               <button class="mini" @click="confirmDeleteId = null">No</button>
             </template>
             <template v-else>
-              <button class="send" :disabled="!!busy || !port" :title="c.name" @click="sendSaved(c)">
+              <button class="send" :disabled="!canSend" :title="c.name" @click="sendSaved(c)">
                 {{ busy === `cmd-${c.id}` ? 'Sending…' : c.name }}
               </button>
               <template v-if="isAdmin">
@@ -189,13 +215,13 @@ async function sendCustom() {
             No commands yet.<template v-if="isAdmin"> Use “+ Add command”.</template>
           </p>
         </div>
-        <p v-if="commands.length && !port" class="hint">Enter a port above to enable the commands.</p>
+        <p v-if="commands.length && !isMqtt && !port" class="hint">Enter a port above to enable the commands.</p>
 
         <details class="advanced">
           <summary>Send custom text (advanced)</summary>
           <form class="row" @submit.prevent="sendCustom">
             <input v-model="custom" placeholder="Any text — sent exactly as typed" maxlength="1000" required />
-            <button class="btn secondary" type="submit" :disabled="!!busy || !port">{{ busy === 'custom' ? 'Waiting…' : 'Send' }}</button>
+            <button class="btn secondary" type="submit" :disabled="!canSend">{{ busy === 'custom' ? 'Waiting…' : 'Send' }}</button>
           </form>
         </details>
       </section>
@@ -212,7 +238,7 @@ async function sendCustom() {
             <span class="arrow">{{ { out: '→', in: '←', ok: '✓', err: '✗' }[l.kind] }}</span>
             <span class="txt">{{ l.text }}</span>
           </div>
-          <div v-if="busy" class="line info"><span class="t" /><span class="arrow">…</span><span class="txt">waiting for the device (a ping to an unreachable device takes about 7 s)</span></div>
+          <div v-if="busy" class="line info"><span class="t" /><span class="arrow">…</span><span class="txt">{{ isMqtt ? 'waiting for the broker / device (up to a few seconds)' : 'waiting for the device (a ping to an unreachable device takes about 7 s)' }}</span></div>
         </div>
       </section>
     </template>
@@ -236,6 +262,10 @@ h3 { font-size: 0.95rem; margin-bottom: 0.2rem; }
 .cmd-form { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.6rem 0; padding: 0.7rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .cmd-form input { flex: 1 1 200px; }
 .mono { font-family: ui-monospace, Consolas, monospace; }
+.topics { margin: -0.4rem 0 1rem; display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.85rem; }
+.topics code { background: var(--surface-2); padding: 0.05rem 0.35rem; border-radius: 5px; word-break: break-all; }
+.topics .arrow { display: inline-block; width: 1rem; font-weight: 700; color: var(--primary); }
+.topics .bad { color: var(--red-fg); }
 
 .chips { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 0.6rem; }
 .chip { display: inline-flex; align-items: stretch; border: 1px solid var(--primary); border-radius: 10px; overflow: hidden; background: var(--primary-soft); }

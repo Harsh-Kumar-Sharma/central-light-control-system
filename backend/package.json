@@ -24,6 +24,7 @@
     "mysql2": "^3.11.0"
   },
   "devDependencies": {
+    "aedes": "^1.2.0",
     "supertest": "^7.2.2"
   }
 }

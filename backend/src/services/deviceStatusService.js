@@ -4,6 +4,8 @@ import { parseStatusReply, isReplyComplete } from './statusParser.js';
 import { withTransmitterLock } from './transmitterLock.js';
 import { getSystemMonitoringConfig } from './monitoringService.js';
 import { recordSensors } from './sensorService.js';
+import * as mqttLinks from './mqttLinks.js';
+import { mqttConfigOf } from './mqttConfig.js';
 import { raiseDeviceOffline, resolveDeviceOffline, raiseTransmitterOffline, resolveTransmitterOffline } from './alarmService.js';
 
 const LINE_ENDINGS = { none: '', lf: '\n', crlf: '\r\n' };
@@ -97,23 +99,28 @@ export function stateFromCommand(built) {
   return {};
 }
 
-export function statusText(row) {
-  return String(row.status_command).replaceAll('{address}', String(row.lora_address)) + (LINE_ENDINGS[row.lan_line_ending] ?? '');
+export function statusText(row, lineEnding = true) {
+  return String(row.status_command).replaceAll('{address}', String(row.lora_address)) + (lineEnding ? (LINE_ENDINGS[row.lan_line_ending] ?? '') : '');
 }
 
 const ROW_SQL = `SELECT r.id, r.lora_address, r.status_command, r.status AS receiver_status,
                         t.id AS transmitter_id, t.ip_address, t.port, t.lan_line_ending,
-                        t.connection_mode, t.status AS transmitter_status
+                        t.connection_mode, t.status AS transmitter_status,
+                        t.mqtt_host, t.mqtt_port, t.mqtt_publish_topic, t.mqtt_subscribe_topic
                  FROM receivers r JOIN transmitters t ON t.id = r.parent_transmitter_id`;
 
 // Asks one receiver for its state through its LAN transmitter.
 // connected=false means the transmitter itself could not be reached.
 async function queryReceiver(row) {
   if (!row.status_command) return { ok: false, connected: true, reason: 'NO_STATUS_COMMAND', detail: 'No status command is set for this receiver' };
-  if (row.connection_mode !== 'lan' || !row.ip_address || !isValidPort(row.port) || !isAllowedTestTarget(row.ip_address)) {
-    return { ok: false, connected: true, reason: 'NOT_POLLABLE', detail: 'Transmitter is not a LAN transmitter with a valid private IP and port' };
+  const mqttCfg = mqttConfigOf(row);
+  const lanOk = row.connection_mode === 'lan' && row.ip_address && isValidPort(row.port) && isAllowedTestTarget(row.ip_address);
+  if (!lanOk && !mqttCfg) {
+    return { ok: false, connected: true, reason: 'NOT_POLLABLE', detail: 'Transmitter is not a LAN transmitter with a valid private IP and port, nor an MQTT one with its broker set' };
   }
-  const r = await withTransmitterLock(row.transmitter_id, () => sendTcpMessage(row.ip_address, row.port, statusText(row), REPLY_TIMEOUT_MS, { isComplete: isReplyComplete, settleMs: 700 }));
+  const r = mqttCfg
+    ? await withTransmitterLock(row.transmitter_id, () => mqttLinks.request(row.transmitter_id, mqttCfg, statusText(row, false), { timeoutMs: REPLY_TIMEOUT_MS, isComplete: isReplyComplete, settleMs: 700 }))
+    : await withTransmitterLock(row.transmitter_id, () => sendTcpMessage(row.ip_address, row.port, statusText(row), REPLY_TIMEOUT_MS, { isComplete: isReplyComplete, settleMs: 700 }));
   if (!r.connected) return { ok: false, connected: false, reason: 'UNREACHABLE', detail: `Cannot reach transmitter (${r.detail})` };
   if (!r.ok) return { ok: false, connected: true, reason: 'NO_REPLY', detail: r.detail };
   const parsed = parseStatusReply(r.received);
@@ -147,9 +154,10 @@ const failures = new Map(); // receiverId -> consecutive failed polls
 export async function pollAllOnce() {
   const [rows] = await pool.query(
     `${ROW_SQL}
-     WHERE t.connection_mode = 'lan' AND t.status = 'active' AND r.status = 'active'
+     WHERE t.status = 'active' AND r.status = 'active'
        AND r.status_command IS NOT NULL AND r.status_command <> ''
-       AND t.ip_address IS NOT NULL AND t.port IS NOT NULL
+       AND ((t.connection_mode = 'lan' AND t.ip_address IS NOT NULL AND t.port IS NOT NULL)
+         OR (t.connection_mode = 'mqtt' AND t.mqtt_host IS NOT NULL AND t.mqtt_publish_topic IS NOT NULL AND t.mqtt_subscribe_topic IS NOT NULL))
      ORDER BY t.id, r.id`
   );
   const byTransmitter = new Map();
