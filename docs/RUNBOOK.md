@@ -187,3 +187,35 @@ Reply Address:2,Message:ACK:R1OFF
   `+OK` but no receiver ACK, and the relay did not change; the same command through the single backend worked
   every time. For an extra instance (test run, second dev server) set `DISABLE_STATUS_POLLING=true`, and don't
   send device commands from it while another backend is running.
+
+## 8. Plans: CAD drawings (DWG / DXF)
+
+**What it does.** A project's drawing is uploaded once (Plans → Upload drawing). The server converts it to compact
+vector geometry (lines, polylines, arcs, circles, text, block inserts, hatch outlines, by layer) and the browser
+draws it on a canvas. Lights are then placed on it (stored in the drawing's own coordinates, so they survive a
+re-upload at the same origin) and controlled from it exactly as on the Control page. The original file is kept
+(Plans → `GET /api/plans/:id/source`).
+
+**Converters.** DWG: LibreDWG compiled to WebAssembly (`@mlightcad/libredwg-web`, **GPL-3.0**). DXF: `dxf-parser` (MIT).
+Both feed one normaliser in `backend/src/services/cadImport.js`, so a different DWG converter (ODA File Converter,
+Autodesk Platform Services) only needs a new reader that returns the same canonical entities.
+*Licence:* GPL-3.0 can apply if this system is distributed to a client or sold. Take advice before doing that, or swap the
+DWG reader.
+
+**Limits and behaviour.**
+- Upload limit 40 MB; one conversion at a time (CPU-bound, runs inside the API process: a very large file pauses other
+  requests for its duration). The 1.3 MB sample converts in about a second.
+- Not drawn: images, wipeouts, dimensions, solids, 3D, viewports/paper space, multileaders. HATCH is drawn as its outline.
+  Colours follow the layer / entity (ByLayer, ByBlock, index colours); very light or very dark CAD colours are
+  adjusted for the current theme. Text is drawn in a plain font (no CAD fonts).
+- The first view is chosen from where the drawing's text is (stray geometry far away, or a point left at 0,0, would
+  otherwise leave the real drawing tiny). Layers that the file freezes or turns off start hidden; the team can save a
+  different layer choice (Layers tab → Save for everyone, needs `plans.edit`).
+- Blocks (INSERT) are expanded with their scale/rotation, up to 600,000 shapes; beyond that the drawing is cut short
+  (`stats.truncated`).
+- Coordinates in many civil drawings are real map coordinates (UTM). They are kept, so georeferencing onto the GPS
+  map is possible later if the project's UTM zone is known.
+
+**Full screen / mini map.** The full-screen button uses the browser's real full screen and falls back to filling the
+window where the browser refuses it. The floating mini map (pin it from Plans or the plan page) is remembered per
+browser (`localStorage.miniPlan`), follows you across pages, and is hidden on narrow screens.

@@ -6,6 +6,7 @@ import { mapApi } from '../api/resources.js';
 import { estimateRoute, pathLengthM, kmText } from '../utils/geo.js';
 import { useAuthStore } from '../stores/auth.js';
 import LightControlModal from '../components/LightControlModal.vue';
+import MapTabs from '../components/plan/MapTabs.vue';
 
 const auth = useAuthStore();
 const canControl = computed(() => auth.can('control', 'control'));
@@ -314,6 +315,7 @@ watch([arming, () => editing.roadId], ([a, e]) => { if (map) map.getContainer().
 
 <template>
   <div>
+    <MapTabs />
     <div class="page-header">
       <div>
         <h2>GPS map</h2>

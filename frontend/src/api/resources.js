@@ -1,5 +1,23 @@
 import { apiClient } from './client.js';
 
+export const plansApi = {
+  list: () => apiClient.get('/plans').then((r) => r.data),
+  get: (id) => apiClient.get('/plans/' + id).then((r) => r.data.plan),
+  // The server sends the drawing gzip-compressed; the browser unpacks it.
+  geometry: (id) => apiClient.get('/plans/' + id + '/geometry', { timeout: 120000 }).then((r) => r.data),
+  upload: (file, name, onProgress) => file.arrayBuffer().then((buf) => apiClient.post('/plans/upload', buf, {
+    headers: { 'Content-Type': 'application/octet-stream', 'X-Filename': encodeURIComponent(file.name), 'X-Plan-Name': encodeURIComponent(name) },
+    timeout: 300000,
+    maxBodyLength: Infinity,
+    onUploadProgress: (e) => onProgress?.(e.total ? e.loaded / e.total : null),
+  }).then((r) => r.data)),
+  rename: (id, name) => apiClient.put('/plans/' + id, { name }).then((r) => r.data),
+  setLayers: (id, hidden) => apiClient.put('/plans/' + id + '/layers', { hidden }).then((r) => r.data),
+  remove: (id) => apiClient.delete('/plans/' + id).then((r) => r.data),
+  lights: (id) => apiClient.get('/plans/' + id + '/lights').then((r) => r.data),
+  setLight: (id, receiverId, pos) => apiClient.put('/plans/' + id + '/lights/' + receiverId, pos).then((r) => r.data),
+};
+
 export const sensorsApi = {
   latest: () => apiClient.get('/sensors/latest').then((r) => r.data),
   history: (params) => apiClient.get('/sensors/history', { params }).then((r) => r.data),

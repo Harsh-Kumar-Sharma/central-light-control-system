@@ -6,6 +6,7 @@ import { alarmsApi } from '../api/resources.js';
 import BrandLogo from './BrandLogo.vue';
 import ThemeToggle from './ThemeToggle.vue';
 import CopyrightLine from './CopyrightLine.vue';
+import MiniPlan from './plan/MiniPlan.vue';
 
 const auth = useAuthStore();
 const route = useRoute();
@@ -17,6 +18,7 @@ const icons = {
   devices: 'M4 6h16M4 12h16M4 18h16',
   control: 'M12 2v10m6.4-6.4a9 9 0 11-12.8 0',
   groups: 'M17 20h5v-2a4 4 0 00-5-3.9M9 11a4 4 0 100-8 4 4 0 000 8zm8 0a3 3 0 100-6M2 20v-2a4 4 0 014-4h6a4 4 0 014 4v2',
+  plans: 'M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3V7zM9 4v13M15 7v13',
   sensors: 'M14 14.76V3.5a2.5 2.5 0 00-5 0v11.26a4.5 4.5 0 105 0z',
   tunnels: 'M3 20V12a9 9 0 0118 0v8M7 20v-8a5 5 0 0110 0v8',
   map: 'M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11zM12 12a2 2 0 100-4 2 2 0 000 4z',
@@ -37,14 +39,33 @@ async function loadAlarms({ force = false } = {}) {
   try { alarms.value = await alarmsApi.summary(); } catch { /* the bell just keeps its last value */ }
 }
 let alarmTimer = null;
-onMounted(() => { loadAlarms({ force: true }); alarmTimer = setInterval(loadAlarms, 15000); });
-onBeforeUnmount(() => clearInterval(alarmTimer));
+// The menu is built from the permissions saved at sign-in, so a feature added later (or a permission an Admin
+// just changed) would stay hidden until the next login. Re-read them whenever the app opens, every minute,
+// and when the tab is looked at again. A dead session is handled by the 401 handler.
+async function syncPermissions({ force = false } = {}) {
+  if (document.hidden && !force) return;
+  try { await auth.refresh(); } catch { /* offline or session ended: keep what we have */ }
+}
+let permTimer = null;
+onMounted(() => {
+  loadAlarms({ force: true });
+  alarmTimer = setInterval(loadAlarms, 15000);
+  syncPermissions({ force: true });
+  permTimer = setInterval(syncPermissions, 60000);
+  window.addEventListener('focus', syncPermissions);
+});
+onBeforeUnmount(() => {
+  clearInterval(alarmTimer);
+  clearInterval(permTimer);
+  window.removeEventListener('focus', syncPermissions);
+});
 
 const links = computed(() => [
   { to: '/', label: 'Dashboard', icon: 'dashboard', show: auth.can('dashboard') },
   { to: '/devices', label: 'Devices', icon: 'devices', show: auth.can('devices') },
   { to: '/control', label: 'Control', icon: 'control', show: auth.can('control') },
   { to: '/map', label: 'GPS map', icon: 'map', show: auth.can('control') },
+  { to: '/plans', label: 'Plans', icon: 'plans', show: auth.can('plans') },
   { to: '/tunnels', label: 'Tunnels', icon: 'tunnels', show: auth.can('tunnels') },
   { to: '/sensors', label: 'Sensors', icon: 'sensors', show: auth.can('sensors') },
   { to: '/groups', label: 'Groups', icon: 'groups', show: auth.can('groups') },
@@ -57,7 +78,7 @@ const links = computed(() => [
   { to: '/users', label: 'Users', icon: 'users', show: auth.can('users') },
 ].filter((l) => l.show));
 
-const pageTitle = computed(() => links.value.find((l) => l.to === route.path)?.label ?? 'Dashboard');
+const pageTitle = computed(() => links.value.find((l) => l.to === route.path || (l.to !== '/' && route.path.startsWith(l.to + '/')))?.label ?? 'Dashboard');
 const initial = computed(() => (auth.user?.username ?? '?').charAt(0).toUpperCase());
 </script>
 
@@ -111,6 +132,7 @@ const initial = computed(() => (auth.user?.username ?? '?').charAt(0).toUpperCas
         <router-view />
       </main>
       <footer class="page-foot"><CopyrightLine /></footer>
+      <MiniPlan v-if="auth.can('plans')" />
     </div>
   </div>
 </template>
@@ -120,15 +142,30 @@ const initial = computed(() => (auth.user?.username ?? '?').charAt(0).toUpperCas
 
 .sidebar {
   width: 248px; flex: none; background: var(--sidebar-bg); color: var(--sidebar-text);
-  display: flex; flex-direction: column; padding: 1.2rem 0.85rem; position: sticky; top: 0; height: 100vh;
-  border-right: 1px solid rgba(150, 160, 255, 0.12);
+  display: flex; flex-direction: column; padding: 1.2rem 0.85rem 0.8rem; position: sticky; top: 0; height: 100vh; height: 100dvh;
+  border-right: 1px solid rgba(150, 160, 255, 0.12); overflow: hidden;
 }
-.brand { display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; padding: 0.35rem 0.6rem 1.3rem; text-decoration: none; }
+.brand { flex: none; display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; padding: 0.35rem 0.6rem 1.3rem; text-decoration: none; }
 .brand:hover { text-decoration: none; }
 .logo-mini { display: none; }
 .brand-sub { color: var(--sidebar-text); font-size: 0.74rem; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; opacity: 0.85; }
 
-nav { display: flex; flex-direction: column; gap: 0.2rem; }
+/* The menu has grown to 15 entries: on a shorter window it scrolls inside the sidebar instead of spilling out of it. */
+nav { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 0.2rem; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(150, 160, 255, 0.35) transparent; margin-right: -0.4rem; padding-right: 0.4rem; }
+nav::-webkit-scrollbar { width: 6px; }
+nav::-webkit-scrollbar-thumb { background: rgba(150, 160, 255, 0.35); border-radius: 6px; }
+nav::-webkit-scrollbar-track { background: transparent; }
+.nav-link { flex: none; }
+@media (max-height: 820px) {
+  .sidebar { padding-top: 0.8rem; }
+  .brand { padding-bottom: 0.7rem; gap: 0.3rem; }
+  .brand-sub { display: none; }
+  .nav-link { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+}
+@media (max-height: 640px) {
+  .logo-full { height: 40px !important; width: auto; } /* beats the size set on the logo itself */
+  .nav-link { padding-top: 0.38rem; padding-bottom: 0.38rem; }
+}
 .nav-link {
   display: flex; align-items: center; gap: 0.75rem; padding: 0.62rem 0.8rem; border-radius: 10px;
   color: var(--sidebar-text); font-weight: 600; transition: background 0.15s, color 0.15s;
@@ -140,7 +177,7 @@ nav { display: flex; flex-direction: column; gap: 0.2rem; }
   color: #fff; box-shadow: inset 3px 0 0 var(--sidebar-active-bar);
 }
 .nav-link:focus-visible { outline-color: #fff; }
-.sidebar-foot { margin-top: auto; padding: 1rem 0.4rem 0; font-size: 0.7rem; line-height: 1.4; text-align: center; opacity: 0.65; }
+.sidebar-foot { flex: none; margin-top: 0; padding: 0.7rem 0.4rem 0; border-top: 1px solid rgba(150, 160, 255, 0.12); font-size: 0.7rem; line-height: 1.4; text-align: center; opacity: 0.65; }
 
 .main-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .topbar {

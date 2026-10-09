@@ -15,6 +15,8 @@ import AlarmsView from '../views/AlarmsView.vue';
 import ReportsView from '../views/ReportsView.vue';
 const MapView = () => import('../views/MapView.vue'); // Leaflet is big: load it only when the map is opened
 import SensorsView from '../views/SensorsView.vue';
+import PlansView from '../views/PlansView.vue';
+const PlanDetailView = () => import('../views/PlanDetailView.vue'); // drawing viewer: loaded when opened
 import TunnelsView from '../views/TunnelsView.vue';
 
 const router = createRouter({
@@ -27,6 +29,8 @@ const router = createRouter({
       children: [
         { path: '', name: 'dashboard', component: DashboardView, meta: { perm: ['dashboard', 'view'] } },
         { path: 'devices', name: 'devices', component: DevicesView, meta: { perm: ['devices', 'view'] } },
+        { path: 'plans', name: 'plans', component: PlansView, meta: { perm: ['plans', 'view'] } },
+        { path: 'plans/:id(\\d+)', name: 'plan', component: PlanDetailView, meta: { perm: ['plans', 'view'] } },
         { path: 'sensors', name: 'sensors', component: SensorsView, meta: { perm: ['sensors', 'view'] } },
         { path: 'tunnels', name: 'tunnels', component: TunnelsView, meta: { perm: ['tunnels', 'view'] } },
         { path: 'map', name: 'map', component: MapView, meta: { perm: ['control', 'view'] } },
@@ -47,7 +51,7 @@ const router = createRouter({
 // UX convenience only — the Node.js backend's requireAuth/requireRole
 // middleware is the real security boundary (SRS §11.2 SEC-003), not this guard.
 // First page this user may open (used when they land somewhere they can't use).
-const HOME_ORDER = ['dashboard', 'control', 'devices', 'groups', 'tunnels', 'sensors', 'schedules', 'alarms', 'reports', 'status', 'logs', 'configuration', 'users'];
+const HOME_ORDER = ['dashboard', 'control', 'devices', 'groups', 'plans', 'tunnels', 'sensors', 'schedules', 'alarms', 'reports', 'status', 'logs', 'configuration', 'users'];
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore();
