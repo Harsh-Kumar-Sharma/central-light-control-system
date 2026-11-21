@@ -165,7 +165,10 @@ onBeforeUnmount(() => {
       <main class="content">
         <router-view />
       </main>
-      <footer class="page-foot"><CopyrightLine /></footer>
+      <footer class="page-foot">
+        <CopyrightLine />
+        <div class="dev-credit">Developed by <strong>Harsh Kumar Sharma</strong></div>
+      </footer>
       <MiniPlan v-if="auth.can('plans')" />
     </div>
   </div>
@@ -235,7 +238,9 @@ nav::-webkit-scrollbar-track { background: transparent; }
 }
 .user-name { font-weight: 700; line-height: 1.1; margin-bottom: 0.15rem; }
 .content { padding: 1.6rem; max-width: 1400px; width: 100%; flex: 1; }
-.page-foot { padding: 1rem 1.6rem 1.3rem; text-align: center; font-size: 0.78rem; color: var(--text-muted); border-top: 1px solid var(--border); }
+.page-foot { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding: 1rem 1.6rem 1.3rem; text-align: center; font-size: 0.78rem; color: var(--text-muted); border-top: 1px solid var(--border); }
+.dev-credit { font-size: 0.74rem; opacity: 0.9; }
+.dev-credit strong { color: var(--text); font-weight: 600; }
 
 @media print {
   .sidebar, .topbar, .page-foot { display: none !important; }
