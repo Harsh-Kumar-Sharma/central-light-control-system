@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from '../stores/auth.js';
 import { alarmsApi } from '../api/resources.js';
@@ -80,16 +80,31 @@ const links = computed(() => [
 
 const pageTitle = computed(() => links.value.find((l) => l.to === route.path || (l.to !== '/' && route.path.startsWith(l.to + '/')))?.label ?? 'Dashboard');
 const initial = computed(() => (auth.user?.username ?? '?').charAt(0).toUpperCase());
+
+// Phones and small tablets: the menu is a slide-in drawer opened from the hamburger button.
+const menuOpen = ref(false);
+const closeMenu = () => { menuOpen.value = false; };
+watch(() => route.fullPath, closeMenu);
+watch(menuOpen, (v) => { document.body.style.overflow = v ? 'hidden' : ''; });
+const onKey = (e) => { if (e.key === 'Escape') closeMenu(); };
+const onResize = () => { if (window.innerWidth > 860) closeMenu(); };
+onMounted(() => { window.addEventListener('keydown', onKey); window.addEventListener('resize', onResize); });
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey);
+  window.removeEventListener('resize', onResize);
+  document.body.style.overflow = '';
+});
 </script>
 
 <template>
   <div class="shell">
-    <aside class="sidebar">
+    <div v-if="menuOpen" class="scrim" aria-hidden="true" @click="closeMenu" />
+    <aside id="app-menu" class="sidebar" :class="{ open: menuOpen }" aria-label="Main menu">
       <router-link to="/" class="brand" aria-label="ARS Highway LED Control — home">
         <BrandLogo :height="54" class="logo-full" />
-        <BrandLogo :height="26" class="logo-mini" />
         <span class="brand-sub">Highway LED Control</span>
       </router-link>
+      <button type="button" class="menu-close" aria-label="Close menu" @click="closeMenu">✕</button>
 
       <nav>
         <router-link v-for="l in links" :key="l.to" :to="l.to" class="nav-link">
@@ -99,11 +114,30 @@ const initial = computed(() => (auth.user?.username ?? '?').charAt(0).toUpperCas
         </router-link>
       </nav>
 
+      <div class="drawer-user">
+        <div class="avatar">{{ initial }}</div>
+        <div class="drawer-user-meta">
+          <div class="user-name">{{ auth.user?.username }}</div>
+          <span class="badge blue">{{ auth.role }}</span>
+        </div>
+        <button class="btn secondary sm" @click="auth.logout()">Sign out</button>
+      </div>
+
       <div class="sidebar-foot"><CopyrightLine /></div>
     </aside>
 
     <div class="main-col">
       <header class="topbar">
+        <button
+          type="button"
+          class="menu-btn"
+          aria-label="Open menu"
+          aria-controls="app-menu"
+          :aria-expanded="menuOpen"
+          @click="menuOpen = true"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+        </button>
         <h1>{{ pageTitle }}</h1>
         <div class="top-actions">
           <router-link
@@ -147,7 +181,7 @@ const initial = computed(() => (auth.user?.username ?? '?').charAt(0).toUpperCas
 }
 .brand { flex: none; display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; padding: 0.35rem 0.6rem 1.3rem; text-decoration: none; }
 .brand:hover { text-decoration: none; }
-.logo-mini { display: none; }
+.menu-btn, .menu-close, .drawer-user, .scrim { display: none; }
 .brand-sub { color: var(--sidebar-text); font-size: 0.74rem; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; opacity: 0.85; }
 
 /* The menu has grown to 15 entries: on a shorter window it scrolls inside the sidebar instead of spilling out of it. */
@@ -208,18 +242,42 @@ nav::-webkit-scrollbar-track { background: transparent; }
   .content { padding: 0; max-width: none; }
 }
 
+/* Phones & small tablets: the menu becomes a slide-in drawer, the top bar a single tidy row. */
 @media (max-width: 860px) {
-  .sidebar { width: 68px; padding-inline: 0.5rem; }
-  .brand { align-items: center; padding-inline: 0; }
-  .logo-full, .brand-sub, .nav-link span, .sidebar-foot { display: none; }
-  .nav-link { position: relative; }
-  .nav-badge { position: absolute; top: 2px; right: 4px; margin: 0; min-width: 16px; height: 16px; font-size: 0.62rem; padding: 0 4px; }
-  .logo-mini { display: block; }
-  .nav-link { justify-content: center; }
-  .user-meta { display: none; }
-  .topbar { padding-inline: 0.8rem; gap: 0.4rem 0.6rem; flex-wrap: wrap; }
-  .topbar h1 { font-size: 1.1rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .top-actions { gap: 0.5rem; margin-left: auto; }
+  .sidebar {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 60; height: auto;
+    width: min(290px, 86vw); padding-bottom: calc(0.8rem + env(safe-area-inset-bottom));
+    transform: translateX(-102%); visibility: hidden;
+    transition: transform 0.22s ease, visibility 0s linear 0.22s;
+    box-shadow: none;
+  }
+  .sidebar.open { transform: none; visibility: visible; transition: transform 0.22s ease; box-shadow: 8px 0 40px rgba(0, 0, 0, 0.45); }
+  .scrim { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(8, 12, 30, 0.55); backdrop-filter: blur(2px); }
+  .menu-close {
+    display: grid; place-items: center; position: absolute; top: 0.75rem; right: 0.75rem; width: 40px; height: 40px;
+    border: 0; border-radius: 10px; background: var(--sidebar-hover); color: #fff; font-size: 1.05rem; cursor: pointer;
+  }
+  .nav-link { padding-top: 0.75rem; padding-bottom: 0.75rem; min-height: 46px; }
+  .drawer-user {
+    flex: none; display: flex; align-items: center; gap: 0.6rem; padding: 0.8rem 0.4rem; margin-top: 0.4rem;
+    border-top: 1px solid rgba(150, 160, 255, 0.12); color: #fff;
+  }
+  .drawer-user-meta { flex: 1; min-width: 0; }
+  .drawer-user .user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .menu-btn {
+    display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 11px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+  }
+  .menu-btn svg { width: 22px; height: 22px; }
+  .topbar { padding: 0.6rem 0.8rem; gap: 0.6rem; }
+  .topbar h1 { flex: 1; font-size: 1.1rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .top-actions { gap: 0.5rem; margin-left: auto; flex: none; }
+  .top-actions .user, .top-actions > .btn { display: none; }
   .content { padding: 1rem; }
+  .page-foot { padding-bottom: calc(1.3rem + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 360px) {
+  .topbar { padding-inline: 0.5rem; gap: 0.4rem; }
+  .top-actions { gap: 0.35rem; }
 }
 </style>

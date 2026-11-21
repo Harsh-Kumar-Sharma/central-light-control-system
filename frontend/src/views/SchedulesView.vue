@@ -451,8 +451,8 @@ const runClass = (r) => (r.failed ? 'amber' : r.total === 0 ? 'gray' : 'green');
 .history .foot { margin: 0.8rem 0 0; }
 
 .stack { display: flex; flex-direction: column; gap: 0.9rem; }
-.two { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
-@media (max-width: 520px) { .two { grid-template-columns: 1fr; } }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.7rem; }
+@media (max-width: 520px) { .two { grid-template-columns: minmax(0, 1fr); } }
 .seg { display: flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .seg button { flex: 1; border: 0; background: var(--surface-2); color: var(--text-muted); font: inherit; font-weight: 600; padding: 0.5rem 0.4rem; cursor: pointer; border-right: 1px solid var(--border); }
 .seg button:last-child { border-right: 0; }

@@ -134,7 +134,7 @@ const applyBrightness = () => send({ type: 'brightness', value: Number(brightnes
 
 <style scoped>
 .meta { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
-.two { grid-template-columns: 1fr 1fr; margin-bottom: 1rem; }
+.two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); margin-bottom: 1rem; }
 .panel { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.85rem 1rem; background: var(--surface-2); margin-bottom: 1rem; }
 .two .panel { margin-bottom: 0; }
 h3 { font-size: 0.92rem; margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.5rem; }

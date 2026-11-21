@@ -345,14 +345,14 @@ const sizeText = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Ma
 .head-actions { display: flex; gap: 0.6rem; }
 
 .stage { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 1rem; align-items: stretch; }
-@media (max-width: 1000px) { .stage { grid-template-columns: 1fr; } }
+@media (max-width: 1000px) { .stage { grid-template-columns: minmax(0, 1fr); } }
 .vwrap { position: relative; height: min(72vh, 720px); min-height: 420px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
 .side { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 0.85rem; display: flex; flex-direction: column; gap: 0.5rem; height: min(72vh, 720px); min-height: 420px; overflow-y: auto; }
 .side input[type='search'] { width: 100%; }
 /* "fs" = real full screen or, where the browser refuses it, the window filled by the page */
 .stage.fs { position: fixed; inset: 0; z-index: 45; grid-template-columns: minmax(0, 1fr) 330px; padding: 0.7rem; gap: 0.7rem; background: var(--bg); }
 .stage.fs .vwrap, .stage.fs .side { height: 100%; min-height: 0; max-height: none; }
-@media (max-width: 1000px) { .stage.fs { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) 40vh; } }
+@media (max-width: 1000px) { .stage.fs { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 40vh; } }
 
 .chips { position: absolute; top: 10px; left: 10px; display: flex; gap: 0.4rem; flex-wrap: wrap; z-index: 2; pointer-events: none; }
 .chip { padding: 0.2rem 0.65rem; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); font-size: 0.8rem; box-shadow: var(--shadow); }

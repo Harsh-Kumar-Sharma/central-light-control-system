@@ -80,7 +80,7 @@ async function onSubmit() {
   position: relative; overflow: hidden; background: var(--hero-bg); color: #fff;
   display: flex; flex-direction: column; justify-content: space-between; padding: 3rem 4rem 1.6rem;
 }
-.hero-body { position: relative; display: flex; flex-direction: column; gap: 1.1rem; margin: auto 0; padding: 2rem 0; }
+.hero-body { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 1.1rem; margin: auto 0; padding: 2rem 0; }
 .hero h1 { font-size: 2.3rem; line-height: 1.15; margin-top: 0.6rem; }
 .hero p { margin: 0; max-width: 430px; font-size: 1.05rem; color: #d6dcff; }
 .hero ul { list-style: none; padding: 0; margin: 0.4rem 0 0; display: flex; flex-direction: column; gap: 0.55rem; color: #e6eaff; }
@@ -105,6 +105,8 @@ form.card .hint { margin: -0.6rem 0 0; }
   .hero { padding: 1.6rem 1.6rem 1rem; }
   .hero-body { padding: 0.4rem 0; gap: 0.7rem; }
   .hero h1 { font-size: 1.5rem; }
+  .hero-body .brand-logo { height: 64px !important; } /* beats the size set on the logo itself */
+  form.card { padding: 1.5rem 1.25rem; }
   .hero ul, .hero p { display: none; }
   .hero-foot { display: none; }
   .panel-foot { display: block; }

@@ -175,7 +175,7 @@ async function refresh() {
 .meta { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
 .seen { color: var(--text-muted); font-size: 0.82rem; }
 
-.relays { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; }
+.relays { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.9rem; }
 .relay { border: 1px solid var(--border); border-left-width: 5px; border-radius: var(--radius-sm); padding: 0.85rem 1rem; background: var(--surface-2); }
 .relay.is-on { border-left-color: var(--green); }
 .relay.is-off { border-left-color: #94a3b8; }

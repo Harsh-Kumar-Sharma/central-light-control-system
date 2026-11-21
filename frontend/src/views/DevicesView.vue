@@ -241,7 +241,7 @@ onBeforeUnmount(() => clearInterval(poll));
         <table>
           <thead>
             <tr>
-              <th>Name</th><th>Mode</th><th>Address</th><th>LoRa addr.</th><th>Connection</th><th>Status</th><th v-if="canTest">Actions</th>
+              <th>Name</th><th>Mode</th><th>Address</th><th>LoRa addr.</th><th>Connection</th><th>Status</th><th v-if="canTest" class="acts">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -267,15 +267,17 @@ onBeforeUnmount(() => clearInterval(poll));
               <td><span class="badge" :class="connection(t).cls" :title="connection(t).title">{{ connection(t).text }}</span></td>
               <td><span class="badge" :class="t.status === 'active' ? 'green' : 'gray'">{{ t.status === 'active' ? 'Enabled' : 'Disabled' }}</span></td>
               <td v-if="canTest" class="acts">
-                <button class="act" title="Test connection" @click="testTx = t">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path :d="icons.test" /></svg>
-                </button>
-                <button v-if="canEdit" class="act" title="Edit" @click="openEditTx(t)">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path :d="icons.edit" /></svg>
-                </button>
-                <button v-if="canDelete" class="act danger" title="Delete" @click="askDelete('tx', t)">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path :d="icons.trash" /></svg>
-                </button>
+                <div class="acts-in">
+                  <button class="act" title="Test connection" aria-label="Test connection" @click="testTx = t">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path :d="icons.test" /></svg>
+                  </button>
+                  <button v-if="canEdit" class="act" title="Edit" aria-label="Edit" @click="openEditTx(t)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path :d="icons.edit" /></svg>
+                  </button>
+                  <button v-if="canDelete" class="act danger" title="Delete" aria-label="Delete" @click="askDelete('tx', t)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path :d="icons.trash" /></svg>
+                  </button>
+                </div>
               </td>
             </tr>
             <tr v-if="!transmitters.length"><td :colspan="canTest ? 7 : 6" class="empty">No transmitters yet.</td></tr>
@@ -292,7 +294,7 @@ onBeforeUnmount(() => clearInterval(poll));
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Name</th><th>Transmitter</th><th>Network address</th><th>Network ID</th><th>Location</th><th>Status</th><th v-if="canTest">Actions</th></tr></thead>
+          <thead><tr><th>Name</th><th>Transmitter</th><th>Network address</th><th>Network ID</th><th>Location</th><th>Status</th><th v-if="canTest" class="acts">Actions</th></tr></thead>
           <tbody>
             <tr v-for="d in devices" :key="d.id">
               <td><strong>{{ d.device_name }}</strong></td>
@@ -302,15 +304,17 @@ onBeforeUnmount(() => clearInterval(poll));
               <td>{{ orDash(d.location) }}</td>
               <td><span class="badge" :class="d.status === 'active' ? 'green' : 'gray'">{{ d.status === 'active' ? 'Enabled' : 'Disabled' }}</span></td>
               <td v-if="canTest" class="acts">
-                <button class="act control" title="Send commands (relay / brightness)" @click="controlRx = d">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path :d="icons.bolt" /></svg>
-                </button>
-                <button v-if="canEdit" class="act" title="Edit" @click="openEditRx(d)">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path :d="icons.edit" /></svg>
-                </button>
-                <button v-if="canDelete" class="act danger" title="Delete" @click="askDelete('rx', d)">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path :d="icons.trash" /></svg>
-                </button>
+                <div class="acts-in">
+                  <button class="act control" title="Send commands (relay / brightness)" aria-label="Send commands (relay / brightness)" @click="controlRx = d">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path :d="icons.bolt" /></svg>
+                  </button>
+                  <button v-if="canEdit" class="act" title="Edit" aria-label="Edit" @click="openEditRx(d)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path :d="icons.edit" /></svg>
+                  </button>
+                  <button v-if="canDelete" class="act danger" title="Delete" aria-label="Delete" @click="askDelete('rx', d)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path :d="icons.trash" /></svg>
+                  </button>
+                </div>
               </td>
             </tr>
             <tr v-if="!devices.length"><td :colspan="canTest ? 7 : 6" class="empty">No receivers yet.</td></tr>
@@ -442,7 +446,13 @@ onBeforeUnmount(() => clearInterval(poll));
 
 <style scoped>
 .sub { color: var(--text-muted); font-size: 0.78rem; }
-.acts { display: flex; gap: 0.35rem; }
+.acts-in { display: flex; gap: 0.35rem; }
+/* On narrow screens the table scrolls sideways; keep the action buttons pinned in view. */
+@media (max-width: 860px) {
+  .acts { position: sticky; right: 0; z-index: 1; background: var(--surface); box-shadow: -8px 0 12px -10px rgba(0, 0, 0, 0.35); }
+  th.acts { background: var(--surface-2); }
+  tbody tr:hover .acts { background: var(--surface-2); }
+}
 .act {
   width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface-2);
   color: var(--text-muted); display: grid; place-items: center; cursor: pointer;
@@ -457,17 +467,17 @@ onBeforeUnmount(() => clearInterval(poll));
 .mono { font-family: ui-monospace, Consolas, monospace; }
 code { background: var(--surface-2); padding: 0.05rem 0.35rem; border-radius: 5px; font-size: 0.85em; }
 
-.mform { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem 1rem; }
+.mform { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.9rem 1rem; }
 .mform .full { grid-column: 1 / -1; }
 .mform p.hint { margin: 0; }
 .check { display: flex; align-items: center; gap: 0.5rem; color: var(--text); font-size: 0.92rem; }
 .check input { width: 18px; height: 18px; accent-color: var(--primary); }
 .seg { display: flex; gap: 0.5rem; }
 .seg button {
-  flex: 1; padding: 0.55rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-2);
+  flex: 1; min-width: 0; padding: 0.55rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-2);
   color: var(--text-muted); font: inherit; font-weight: 600; cursor: pointer;
 }
 .seg button.on { background: var(--primary-soft); color: var(--primary); border-color: var(--primary); }
 .seg button:disabled { opacity: 0.55; cursor: not-allowed; }
-@media (max-width: 600px) { .mform { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .mform { grid-template-columns: minmax(0, 1fr); } }
 </style>
