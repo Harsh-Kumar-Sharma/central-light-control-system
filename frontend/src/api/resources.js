@@ -90,13 +90,17 @@ export const devicesApi = {
   update: (id, payload) => apiClient.put(`/devices/${id}`, payload).then((r) => r.data),
   remove: (id) => apiClient.delete(`/devices/${id}`).then((r) => r.data),
   refreshStatus: (id) => apiClient.post(`/devices/${id}/refresh-status`).then((r) => r.data),
+  statusAll: () => apiClient.get('/devices/status/all').then((r) => r.data.statuses),
   status: (id) => apiClient.get(`/devices/${id}/status`).then((r) => r.data.status),
   sendCommand: (id, payload) => apiClient.post(`/devices/${id}/commands`, payload).then((r) => r.data),
 };
 
 export const groupsApi = {
   list: () => apiClient.get('/groups').then((r) => r.data.groups),
+  get: (id) => apiClient.get(`/groups/${id}`).then((r) => r.data),
   create: (payload) => apiClient.post('/groups', payload).then((r) => r.data),
+  update: (id, payload) => apiClient.put(`/groups/${id}`, payload).then((r) => r.data),
+  remove: (id) => apiClient.delete(`/groups/${id}`).then((r) => r.data),
   sendCommand: (id, payload) => apiClient.post(`/groups/${id}/commands`, payload).then((r) => r.data),
 };
 

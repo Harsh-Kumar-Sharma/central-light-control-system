@@ -51,6 +51,12 @@ app.use('/api/plans', plansRouter);
 
 // Consistent error shape (SRS §9.1 conventions).
 app.use((err, req, res, next) => {
+  // Problems with what the client sent are the client's to fix: 4xx, not a server error.
+  if (err.type === 'entity.parse.failed') return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'The request body is not valid JSON' } });
+  if (err.type === 'entity.too.large') return res.status(413).json({ error: { code: 'PAYLOAD_TOO_LARGE', message: 'The request is too large' } });
+  if (['ER_DATA_TOO_LONG', 'ER_TRUNCATED_WRONG_VALUE', 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD', 'ER_WARN_DATA_OUT_OF_RANGE', 'ER_DATA_OUT_OF_RANGE', 'WARN_DATA_TRUNCATED'].includes(err.code)) {
+    return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'A value is too long or not valid for its field' } });
+  }
   console.error(err);
   res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Unexpected server error' } });
 });

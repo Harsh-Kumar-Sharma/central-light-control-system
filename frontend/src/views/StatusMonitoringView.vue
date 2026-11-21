@@ -11,10 +11,9 @@ const onlineCount = computed(() => rows.value.filter((r) => r.status?.online).le
 async function load() {
   error.value = '';
   try {
-    const devices = await devicesApi.list();
-    rows.value = await Promise.all(
-      devices.map(async (d) => ({ ...d, status: await devicesApi.status(d.id) }))
-    );
+    const [devices, statuses] = await Promise.all([devicesApi.list(), devicesApi.statusAll()]);
+    const byId = new Map(statuses.map((s) => [s.receiver_id, s]));
+    rows.value = devices.map((d) => ({ ...d, status: byId.get(d.id) ?? null }));
   } catch (err) {
     error.value = err.response?.data?.error?.message ?? 'Failed to load status';
   }

@@ -16,6 +16,8 @@ export const authRouter = Router();
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 10,
+  // Only failed attempts count: an office behind one IP address must not lock itself out by logging in normally.
+  skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: { code: 'RATE_LIMITED', message: 'Too many login attempts, try again later' } },
