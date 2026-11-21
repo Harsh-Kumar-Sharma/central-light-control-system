@@ -23,15 +23,29 @@ groupsRouter.post('/', requireAuth, requirePermission('groups', 'create'), async
     return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'name is required' } });
   }
 
-  const [result] = await pool.query('INSERT INTO `groups` (name) VALUES (?)', [name]);
-  const groupId = result.insertId;
+  const bad = (message) => res.status(400).json({ error: { code: 'INVALID_INPUT', message } });
+  if (deviceIds != null && !Array.isArray(deviceIds)) return bad('deviceIds must be a list');
+  const ids = [...new Set((deviceIds ?? []).map(Number))];
+  if (ids.some((id) => !Number.isInteger(id) || id <= 0)) return bad('deviceIds must be receiver IDs');
 
-  if (Array.isArray(deviceIds) && deviceIds.length > 0) {
-    const values = deviceIds.map((id) => [groupId, id]);
-    await pool.query('INSERT INTO group_members (group_id, receiver_id) VALUES ?', [values]);
+  // Group and members are created together: a bad member must not leave an empty group behind.
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [result] = await conn.query('INSERT INTO `groups` (name) VALUES (?)', [name]);
+    const groupId = result.insertId;
+    if (ids.length > 0) {
+      await conn.query('INSERT INTO group_members (group_id, receiver_id) VALUES ?', [ids.map((id) => [groupId, id])]);
+    }
+    await conn.commit();
+    res.status(201).json({ id: groupId });
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    if (err.code === 'ER_NO_REFERENCED_ROW_2') return bad('One or more devices do not exist');
+    throw err;
+  } finally {
+    conn.release();
   }
-
-  res.status(201).json({ id: groupId });
 }));
 
 // POST /api/groups/:id/commands — FR-GRP (SRS §5.2). Same role gate as
