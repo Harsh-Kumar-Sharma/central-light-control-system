@@ -137,9 +137,9 @@ onMounted(load);
       </div>
 
       <form v-if="canCreate" class="form-row" @submit.prevent="createUser">
-        <input v-model="newUser.username" placeholder="Username" required />
-        <input v-model="newUser.password" placeholder="Password" type="password" required />
-        <select v-model="newUser.role">
+        <input v-model="newUser.username" placeholder="Username" aria-label="Username" autocomplete="off" required />
+        <input v-model="newUser.password" placeholder="Password" aria-label="Password" type="password" autocomplete="new-password" required />
+        <select v-model="newUser.role" aria-label="Role">
           <option value="Admin">Admin</option>
           <option value="Operator">Operator</option>
           <option value="User">User (view only)</option>
@@ -195,7 +195,8 @@ onMounted(load);
 .you { font-size: 0.7rem; color: var(--text-muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 0.4rem; margin-left: 0.3rem; }
 .access { font-variant-numeric: tabular-nums; color: var(--text-muted); margin-right: 0.4rem; }
 .custom { font-size: 0.7rem; }
-.acts { display: flex; gap: 0.4rem; }
+.acts { white-space: nowrap; }
+.acts .btn + .btn { margin-left: 0.4rem; }
 .tpl { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin-bottom: 0.9rem; }
 .tpl .hint { margin: 0; }
 .grid th { background: transparent; text-transform: none; letter-spacing: 0; font-size: 0.9rem; color: var(--text); white-space: nowrap; }

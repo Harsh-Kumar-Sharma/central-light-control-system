@@ -69,7 +69,7 @@ onMounted(load);
 
 <style scoped>
 .form { max-width: 640px; display: flex; flex-direction: column; gap: 1rem; }
-.two { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.two { grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); }
 .check { display: flex; align-items: center; gap: 0.5rem; color: var(--text); font-size: 0.95rem; }
 .check input { width: 18px; height: 18px; accent-color: var(--primary); }
 </style>

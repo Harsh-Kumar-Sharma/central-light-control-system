@@ -244,6 +244,16 @@ async function saveTariff() {
 .seg button { border: 0; border-right: 1px solid var(--border); background: var(--surface-2); color: var(--text-muted); font: inherit; font-weight: 600; padding: 0.45rem 0.9rem; cursor: pointer; }
 .seg button:last-child { border-right: 0; }
 .seg button.on { background: var(--primary); color: var(--on-primary); }
+.seg button { white-space: nowrap; }
+@media (max-width: 600px) {
+  .filters { gap: 0.6rem; }
+  .filters .seg, .filters > select, .dates { flex: 1 1 100%; }
+  .seg button { flex: 1 1 0; padding-inline: 0.4rem; }
+  .dates { display: flex; align-items: center; gap: 0.5rem; }
+  .dates input { flex: 1 1 0; min-width: 0; }
+  .head-actions { width: 100%; }
+  .head-actions .btn { flex: 1 1 auto; }
+}
 .dates { display: flex; align-items: center; gap: 0.5rem; }
 .period-line { margin: 0 0 0.8rem; font-weight: 700; }
 .estimate { line-height: 1.5; }
@@ -264,12 +274,17 @@ async function saveTariff() {
 .empty { text-align: center; color: var(--text-muted); padding: 1.2rem 0; margin: 0; }
 
 .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.1rem; }
-@media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
-.facts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.8rem; margin: 0; }
+@media (max-width: 900px) { .two { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) {
+  .grid.stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stat { padding: 0.85rem; gap: 0.55rem; }
+  .stat .icon { width: 38px; height: 38px; }
+}
+.facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; margin: 0; }
 .facts dt { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; }
 .facts dd { margin: 0; font-size: 1.5rem; font-weight: 800; }
 .stack { display: flex; flex-direction: column; gap: 0.9rem; }
-.two-f { display: grid; grid-template-columns: 2fr 1fr; gap: 0.7rem; }
+.two-f { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 0.7rem; }
 
 @media print {
   .no-print { display: none !important; }

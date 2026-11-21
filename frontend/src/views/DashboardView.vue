@@ -250,7 +250,12 @@ function openRoad(r) {
 
 .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.1rem; margin-bottom: 0; }
 .two > .card { margin-bottom: 1.1rem; }
-@media (max-width: 1000px) { .two { grid-template-columns: 1fr; } }
+@media (max-width: 1000px) { .two { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) {
+  .grid.stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stat { padding: 0.85rem; gap: 0.55rem; }
+  .stat .icon { width: 38px; height: 38px; }
+}
 .empty { text-align: center; color: var(--text-muted); padding: 1.2rem 0; margin: 0; }
 
 .roads, .alarm-list, .up-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.55rem; }

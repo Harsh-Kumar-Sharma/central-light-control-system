@@ -663,7 +663,7 @@ function onLightClick(receiverId) {
 
 .bar { display: flex; justify-content: space-between; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
 .bar-left, .bar-right { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
-.road-select { min-width: 240px; font-weight: 700; }
+.road-select { min-width: min(240px, 100%); max-width: 100%; font-weight: 700; }
 .editing-title { font-size: 1.05rem; }
 
 .updated { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.8rem; color: var(--text-muted); margin-right: 0.3rem; }
@@ -671,7 +671,7 @@ function onLightClick(receiverId) {
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--online) 55%, transparent); } 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
 @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
 
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.7rem; margin-bottom: 0.9rem; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr)); gap: 0.7rem; margin-bottom: 0.9rem; }
 .kpi { display: flex; align-items: center; gap: 0.75rem; padding: 0.7rem 0.9rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
 .k-ico { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; flex: none; }
 .k-ico svg { width: 20px; height: 20px; }
@@ -684,7 +684,7 @@ function onLightClick(receiverId) {
 .k-lbl { font-size: 0.78rem; color: var(--text-muted); font-weight: 600; }
 
 .stage.browsing { grid-template-columns: minmax(0, 1fr) 300px; }
-@media (max-width: 1100px) { .stage.browsing { grid-template-columns: 1fr; } }
+@media (max-width: 1100px) { .stage.browsing { grid-template-columns: minmax(0, 1fr); } }
 .lights-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 0.9rem; display: flex; flex-direction: column; gap: 0.6rem; max-height: 640px; }
 .lp-head { display: flex; align-items: baseline; justify-content: space-between; }
 .lp-head h3 { font-size: 1rem; }
@@ -715,9 +715,9 @@ function onLightClick(receiverId) {
 .chip.gray { background: var(--surface-2); color: var(--text-muted); }
 .chip.amber { background: var(--amber-soft); color: var(--amber-fg); border-color: transparent; }
 
-.stage { display: grid; grid-template-columns: 1fr; gap: 1rem; align-items: start; }
+.stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; align-items: start; }
 .stage.editing { grid-template-columns: minmax(0, 1fr) 310px; }
-@media (max-width: 1000px) { .stage.editing { grid-template-columns: 1fr; } }
+@media (max-width: 1000px) { .stage.editing { grid-template-columns: minmax(0, 1fr); } }
 
 .legend { display: flex; gap: 1.2rem; flex-wrap: wrap; align-items: center; margin-top: 0.8rem; font-size: 0.85rem; }
 .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 0.35rem; vertical-align: middle; }

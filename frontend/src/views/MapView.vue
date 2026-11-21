@@ -434,7 +434,7 @@ watch([arming, () => editing.roadId], ([a, e]) => { if (map) map.getContainer().
 .chip.amber, .chip.warn { background: var(--amber-soft); color: var(--amber-fg); border-color: transparent; }
 
 .stage { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 1rem; align-items: start; }
-@media (max-width: 1000px) { .stage { grid-template-columns: 1fr; } }
+@media (max-width: 1000px) { .stage { grid-template-columns: minmax(0, 1fr); } }
 .map-wrap { position: relative; isolation: isolate; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
 .map { height: min(68vh, 640px); min-height: 380px; background: var(--surface-2); }
 .empty-note { position: absolute; z-index: 500; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(420px, 86%); text-align: center; display: flex; flex-direction: column; gap: 0.4rem; padding: 1rem 1.2rem; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }

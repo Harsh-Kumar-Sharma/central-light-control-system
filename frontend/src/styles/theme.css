@@ -164,7 +164,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
 .form-row { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; margin-top: 0.9rem; }
 .form-row input, .form-row select { flex: 1 1 150px; min-width: 0; }
-.field { display: flex; flex-direction: column; gap: 0.3rem; }
+.field { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
+/* Lets a field shrink with its column instead of pushing the layout wider (long <option> text, etc.). */
+input:not([type='checkbox']):not([type='radio']), select, textarea { max-width: 100%; }
 
 /* ---------- tables ---------- */
 .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
@@ -176,6 +178,10 @@ th {
 td { padding: 0.65rem 0.85rem; border-top: 1px solid var(--border); white-space: nowrap; }
 tbody tr:hover { background: var(--surface-2); }
 .empty { text-align: center; color: var(--text-muted); padding: 1.5rem; }
+/* Empty-state messages in a table wrap instead of stretching the table off-screen. */
+td.empty, td.empty-row, td[colspan] { white-space: normal; }
+/* Long commands / JSON samples wrap rather than widening the page. */
+code { overflow-wrap: anywhere; }
 
 /* ---------- badges ---------- */
 .badge {
@@ -203,3 +209,36 @@ tbody tr:hover { background: var(--surface-2); }
 .stat.red .icon { background: var(--red-soft); color: var(--red-fg); }
 .stat.amber .icon { background: var(--amber-soft); color: var(--amber-fg); }
 .stat.teal .icon { background: var(--accent-soft); color: var(--accent-fg); }
+.stat > div { min-width: 0; }
+
+/* ---------- touch & small screens ---------- */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+button, a, input, select, textarea, label { -webkit-tap-highlight-color: transparent; }
+img, svg, video, canvas { max-width: 100%; }
+
+/* Finger-sized controls on touch screens. */
+@media (pointer: coarse) {
+  .btn { min-height: 40px; }
+  .btn.sm { min-height: 34px; }
+  input:not([type='checkbox']):not([type='radio']):not([type='range']), select { min-height: 42px; }
+}
+
+@media (max-width: 600px) {
+  /* 16px stops iOS Safari from zooming the page when a field is focused. */
+  input, select, textarea { font-size: 16px; }
+  .card { padding: 0.95rem; margin-bottom: 1rem; border-radius: 12px; }
+  .card-title { flex-wrap: wrap; gap: 0.5rem; }
+  .card-title h2 { min-width: 0; }
+  .page-header { margin-bottom: 1rem; }
+  .grid { gap: 0.75rem; }
+  /* Two stat tiles per row instead of one long column. */
+  .grid.stats { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 1rem; }
+  .stat { flex-direction: column; align-items: flex-start; gap: 0.55rem; padding: 0.85rem; }
+  .stat .icon { width: 38px; height: 38px; border-radius: 11px; }
+  .stat .icon svg { width: 20px; height: 20px; }
+  .stat .value { font-size: 1.35rem; }
+  .stat .label { font-size: 0.78rem; }
+  th { padding: 0.55rem 0.65rem; }
+  td { padding: 0.55rem 0.65rem; }
+  .table-wrap { -webkit-overflow-scrolling: touch; }
+}

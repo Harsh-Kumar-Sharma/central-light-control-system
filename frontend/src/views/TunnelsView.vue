@@ -376,7 +376,7 @@ async function confirmDelete() {
 
 .levels { padding: 0.6rem 0.8rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; font-size: 0.88rem; }
 .stack { display: flex; flex-direction: column; gap: 0.9rem; }
-.three { display: grid; grid-template-columns: 2fr 1fr 2fr; gap: 0.7rem; margin-bottom: 0.4rem; }
+.three { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 2fr); gap: 0.7rem; margin-bottom: 0.4rem; }
 @media (max-width: 640px) { .three { grid-template-columns: 1fr; } }
 
 .zones-head { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.8rem; }
@@ -390,14 +390,14 @@ async function confirmDelete() {
 .icon { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
 .icon:disabled { opacity: 0.4; cursor: default; }
 .icon.danger { color: var(--red-fg); }
-.sliders { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.7rem; margin-top: 0.6rem; }
+.sliders { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.7rem; margin-top: 0.6rem; }
 @media (max-width: 640px) { .sliders { grid-template-columns: 1fr; } }
 .sl { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); }
 .sl b { color: var(--text); }
 .sl input[type='range'] { padding: 0; accent-color: var(--primary); }
 .lights { margin-top: 0.6rem; }
 .lights summary { cursor: pointer; font-weight: 600; font-size: 0.88rem; }
-.pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.35rem; margin-top: 0.5rem; }
+.pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr)); gap: 0.35rem; margin-top: 0.5rem; }
 .chk { display: flex; align-items: center; gap: 0.45rem; padding: 0.35rem 0.5rem; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); cursor: pointer; font-size: 0.85rem; }
 .chk.taken { opacity: 0.55; cursor: default; }
 .chk input { accent-color: var(--primary); width: 15px; height: 15px; padding: 0; }

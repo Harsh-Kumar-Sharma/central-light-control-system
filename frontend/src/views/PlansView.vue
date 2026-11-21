@@ -182,7 +182,7 @@ const shapes = (p) => Object.values(p.stats?.drawn ?? {}).reduce((n, v) => n + v
 .empty { text-align: center; padding: 3rem 1.2rem; border: 2px dashed var(--border); }
 .empty.over, .grid-cards.over { outline: 3px dashed var(--primary); outline-offset: 4px; }
 .empty p { max-width: 520px; margin: 0.6rem auto 1.2rem; }
-.grid-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; }
+.grid-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 1rem; }
 .plan { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.7rem; }
 .plan header { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
 .name { font-size: 1.05rem; font-weight: 800; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

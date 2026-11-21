@@ -95,7 +95,7 @@ onMounted(load);
 
 <style scoped>
 .select-device { max-width: 420px; }
-.controls { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.controls { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
 .controls .card { margin-bottom: 0; }
 .slider-row { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1rem; }
 .slider-row input[type='range'] { flex: 1; padding: 0; accent-color: var(--primary); }
