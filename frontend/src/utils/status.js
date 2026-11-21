@@ -1,7 +1,7 @@
 // Maps command/device status strings to a badge colour class (see styles/theme.css).
 const COLORS = {
   SUCCESS: 'green',
-  ACKNOWLEDGED: 'green',
+  ACKNOWLEDGED: 'amber',
   ONLINE: 'green',
   ACTIVE: 'green',
   SENT_OVER_LORA: 'blue',

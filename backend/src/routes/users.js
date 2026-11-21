@@ -31,12 +31,20 @@ usersRouter.get('/permission-catalog', requireAuth, requirePermission('users', '
   res.json({ modules: MODULES, roleDefaults: ROLE_DEFAULTS });
 });
 
+// Minimal password rule: long enough to resist guessing, short enough not to be a burden.
+const passwordProblem = (pw) => (typeof pw !== 'string' || pw.length < 8 ? 'password must be at least 8 characters' : pw.length > 128 ? 'password can be at most 128 characters' : null);
+
 usersRouter.post('/', requireAuth, requirePermission('users', 'create'), asyncHandler(async (req, res) => {
   const { username, password, role } = req.body ?? {};
   if (!username || !password || !role) {
     return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'username, password and role are required' } });
   }
 
+  if (typeof username !== 'string' || !/^[A-Za-z0-9_.@-]{3,64}$/.test(username)) {
+    return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'username must be 3-64 characters: letters, digits and . _ @ -' } });
+  }
+  const weak = passwordProblem(password);
+  if (weak) return res.status(400).json({ error: { code: 'INVALID_INPUT', message: weak } });
   const [roleRows] = await pool.query('SELECT id FROM roles WHERE name = ?', [role]);
   if (roleRows.length === 0) {
     return res.status(400).json({ error: { code: 'INVALID_INPUT', message: `Unknown role: ${role}` } });
@@ -73,6 +81,13 @@ usersRouter.put('/:id', requireAuth, requirePermission('users', 'edit'), asyncHa
     }
     updates.push('role_id = ?');
     values.push(roleRows[0].id);
+  }
+  if (status && !['active', 'disabled'].includes(status)) {
+    return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'status must be "active" or "disabled"' } });
+  }
+  if (password) {
+    const weak = passwordProblem(password);
+    if (weak) return res.status(400).json({ error: { code: 'INVALID_INPUT', message: weak } });
   }
   if (status) {
     updates.push('status = ?');

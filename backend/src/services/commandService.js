@@ -163,15 +163,24 @@ async function finishDelivery({ base, receiver, built, r, where }) {
   const isAck = Boolean(ack) && norm(ack.command) === norm(sentCommand) && (ack.source == null || ack.source === receiver.lora_address);
   const rssi = ack?.rssi ?? null;
   const snr = ack?.snr ?? null;
-  const status = isAck ? 'SUCCESS' : 'ACKNOWLEDGED';
+  // The transmitter's own "LoRa << +OK" only says the radio packet went out. If nothing from the receiver
+  // came back at all (no "Reply Address:..." line, no JSON), the light did not answer: that is NO_ACK, not a
+  // reply in a strange format.
+  const receiverSpoke = Boolean(ack) || /Reply\s*Address\s*[:=]/i.test(r.received) || /^\s*[{[]/.test(r.received);
+  const status = isAck ? 'SUCCESS' : receiverSpoke ? 'ACKNOWLEDGED' : 'NO_ACK';
 
   await pool.query(
-    'UPDATE commands SET status = ?, response = ?, rssi = ?, snr = ?, acknowledged_at = NOW() WHERE id = ?',
+    `UPDATE commands SET status = ?, response = ?, rssi = ?, snr = ?, acknowledged_at = ${status === 'NO_ACK' ? 'NULL' : 'NOW()'} WHERE id = ?`,
     [status, r.received.slice(0, 500), rssi, snr, commandId]
   );
   if (isAck) {
     // An acknowledged command means the relay / brightness really changed.
     await applyStatus(receiver.id, { online: true, rssi, snr, source: 'command', ...stateFromCommand(built) });
+  }
+  if (status === 'NO_ACK') {
+    const detail = 'The transmitter sent the command, but the light did not answer';
+    await pool.query('UPDATE commands SET error_code = ? WHERE id = ?', [detail, commandId]);
+    return { ...base, status, error: detail, reply: r.received, rssi, snr, latencyMs: r.latencyMs };
   }
   return { ...base, status, reply: r.received, rssi, snr, latencyMs: r.latencyMs };
 }
@@ -197,6 +206,9 @@ function scheduleTimeoutCheck(commandId) {
 // FR-GRP-001/003 (SRS §5.2) — fans a command out to every device in a group
 // and computes the aggregate result once every per-device command settles.
 export async function sendGroupCommand({ userId, userRole, groupId, type, payload }) {
+  // A bad command is refused as a whole, before anything is sent or a group run is recorded.
+  const check = buildCommandString(0, type, payload);
+  if (check.error) return { error: check.error, message: check.message };
   const [members] = await pool.query('SELECT receiver_id FROM group_members WHERE group_id = ?', [groupId]);
   if (members.length === 0) {
     return { error: 'INVALID_COMMAND', message: 'Group has no member devices' };
@@ -214,7 +226,8 @@ export async function sendGroupCommand({ userId, userRole, groupId, type, payloa
 
   // Aggregate immediately from dispatch outcomes; a later reconciliation pass
   // (Phase 4/6) would re-check after ACKs/timeouts settle — not built here.
-  const failureCount = results.filter((r) => !isAcceptedResult(r) || r.status === 'NO_ACK').length;
+  // Only a confirmed ACK (or, on the server's default broker, a fire-and-forget publish) counts as done.
+  const failureCount = results.filter((r) => r.status !== 'SUCCESS' && r.status !== 'SENT_OVER_LORA').length;
   const aggregate = failureCount === 0 ? 'SUCCESS' : failureCount === results.length ? 'FAILED' : 'PARTIAL_SUCCESS';
   await pool.query('UPDATE group_executions SET aggregate_result = ? WHERE id = ?', [aggregate, groupExecutionId]);
 

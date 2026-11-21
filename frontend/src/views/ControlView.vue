@@ -391,7 +391,7 @@ async function runBulk() {
     for (const n of relays) {
       try {
         const r = await devicesApi.sendCommand(t.receiverId, { type: `relay${n}`, state: bulk.state });
-        if (r.status && !['SUCCESS', 'ACKNOWLEDGED', 'SENT_OVER_LORA'].includes(r.status)) ok = false;
+        if (r.status && !['SUCCESS', 'SENT_OVER_LORA'].includes(r.status)) ok = false;
       } catch { ok = false; }
     }
     if (!ok) bulk.failed.push(t.name);

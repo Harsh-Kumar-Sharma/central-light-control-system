@@ -21,6 +21,9 @@ const STATUSES = ['active', 'inactive']; // shown as Enabled / Disabled in the U
 const bad = (res, message) => res.status(400).json({ error: { code: 'INVALID_INPUT', message } });
 
 function validateFields(f) {
+  if (f.name != null && (typeof f.name !== 'string' || f.name.length > 128)) return 'name can be at most 128 characters';
+  if (f.junctionLocation != null && String(f.junctionLocation).length > 255) return 'junction location can be at most 255 characters';
+  if (f.loraAddress != null && f.loraAddress !== '' && !(Number.isInteger(Number(f.loraAddress)) && Number(f.loraAddress) >= 0 && Number(f.loraAddress) <= 65535)) return 'LoRa address must be a whole number from 0 to 65535';
   for (const [label, value] of [['ipAddress', f.ipAddress], ['gateway', f.gateway], ['subnetMask', f.subnetMask]]) {
     if (value != null && value !== '' && !parseIpv4(value)) {
       return `${label} must be a valid IPv4 address (e.g. 192.168.1.50)`;

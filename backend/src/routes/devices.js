@@ -24,6 +24,14 @@ devicesRouter.get('/', requireAuth, requirePermission('devices', 'view'), asyncH
   res.json({ devices: rows });
 }));
 
+// GET /api/devices/status/all — every device's latest snapshot in one call (the Status page used to ask once per light).
+devicesRouter.get('/status/all', requireAuth, requirePermission('devices', 'view'), asyncHandler(async (req, res) => {
+  const [rows] = await pool.query(
+    `SELECT receiver_id, online, brightness, relay1, relay2, rssi, snr, last_seen, last_status_at, state_source, state_at FROM device_status`
+  );
+  res.json({ statuses: rows });
+}));
+
 // GET /api/devices/:id/status — latest snapshot (SRS §6.5).
 devicesRouter.get('/:id/status', requireAuth, requirePermission('devices', 'view'), asyncHandler(async (req, res) => {
   const [rows] = await pool.query(
@@ -86,6 +94,8 @@ function validateDeviceFields(f, { requireAll }) {
   if (requireAll && (!f.deviceName || !isNonNegInt(f.loraAddress) || !f.parentTransmitterId)) {
     return 'deviceName, address and parent transmitter are required';
   }
+  if (f.deviceName != null && (typeof f.deviceName !== 'string' || f.deviceName.length > 128)) return 'device name can be at most 128 characters';
+  if (f.location != null && String(f.location).length > 255) return 'location can be at most 255 characters';
   if (f.loraAddress !== undefined && !isNonNegInt(f.loraAddress)) return 'address must be a whole number (0 or more)';
   if (f.loraAddress !== undefined && Number(f.loraAddress) > 65535) return 'address must be 65535 or less';
   if (f.networkId !== undefined && f.networkId !== null && f.networkId !== '' && !isNonNegInt(f.networkId)) return 'network ID must be a whole number (0 or more)';
