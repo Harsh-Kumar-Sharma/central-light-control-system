@@ -1,0 +1,2 @@
+*.sh text eol=lf
+deploy/site.conf text eol=lf
