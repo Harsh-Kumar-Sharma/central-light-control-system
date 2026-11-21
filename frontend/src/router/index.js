@@ -18,6 +18,7 @@ import SensorsView from '../views/SensorsView.vue';
 import PlansView from '../views/PlansView.vue';
 const PlanDetailView = () => import('../views/PlanDetailView.vue'); // drawing viewer: loaded when opened
 import TunnelsView from '../views/TunnelsView.vue';
+const GuideView = () => import('../views/GuideView.vue'); // long document: loaded only when opened
 
 const router = createRouter({
   history: createWebHistory(),
@@ -42,6 +43,7 @@ const router = createRouter({
         { path: 'status', name: 'status', component: StatusMonitoringView, meta: { perm: ['status', 'view'] } },
         { path: 'configuration', name: 'configuration', component: ConfigurationView, meta: { perm: ['configuration', 'view'] } },
         { path: 'users', name: 'users', component: UsersView, meta: { perm: ['users', 'view'] } },
+        { path: 'guide', name: 'guide', component: GuideView }, // open to every signed-in user
         { path: 'logs', name: 'logs', component: LogsView, meta: { perm: ['logs', 'view'] } },
       ],
     },

@@ -29,6 +29,7 @@ const icons = {
   config: 'M12 15a3 3 0 100-6 3 3 0 000 6zm7.4-3a7.4 7.4 0 00-.1-1.2l2-1.6-2-3.4-2.4 1a7.5 7.5 0 00-2-1.2L14.5 3h-4l-.4 2.6a7.5 7.5 0 00-2 1.2l-2.4-1-2 3.4 2 1.6a7.4 7.4 0 000 2.4l-2 1.6 2 3.4 2.4-1a7.5 7.5 0 002 1.2l.4 2.6h4l.4-2.6a7.5 7.5 0 002-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z',
   users: 'M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zm13 10v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8',
   logs: 'M9 12h6M9 16h6M9 8h2M7 3h7l5 5v13H7z',
+  guide: 'M4 19.5A2.5 2.5 0 016.5 17H20V3H6.5A2.5 2.5 0 004 5.5v14zM4 19.5A2.5 2.5 0 006.5 22H20v-5',
 };
 
 // Alarm count for the bell and the sidebar badge, refreshed while the tab is visible.
@@ -76,6 +77,7 @@ const links = computed(() => [
   { to: '/logs', label: 'Logs', icon: 'logs', show: auth.can('logs') },
   { to: '/configuration', label: 'Configuration', icon: 'config', show: auth.can('configuration') },
   { to: '/users', label: 'Users', icon: 'users', show: auth.can('users') },
+  { to: '/guide', label: 'Guide', icon: 'guide', show: true },
 ].filter((l) => l.show));
 
 const pageTitle = computed(() => links.value.find((l) => l.to === route.path || (l.to !== '/' && route.path.startsWith(l.to + '/')))?.label ?? 'Dashboard');
