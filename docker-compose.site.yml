@@ -1,0 +1,73 @@
+name: highway-led-control-site
+
+# Site (Ubuntu) deployment stack. Used by ./deploy.sh — config comes from .env,
+# which deploy.sh generates. Everything (MySQL, MQTT, backend, frontend) runs in
+# Docker; the host needs nothing but Docker.
+#
+# Exposure:
+#   frontend  :80    -> the app, reachable on the machine's local IP (no port in the URL)
+#   backend   127.0.0.1 only (the browser reaches it through the frontend's /api proxy)
+#   mysql     127.0.0.1 only
+#   mqtt      :1883  -> LAN, because field transmitters connect to the broker
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?run ./deploy.sh to create .env}
+      MYSQL_DATABASE: ${DB_NAME:-highway_led_control}
+    ports:
+      - "127.0.0.1:${MYSQL_HOST_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --protocol=tcp -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "${MQTT_BIND:-0.0.0.0}:${MQTT_HOST_PORT:-1883}:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    environment:
+      PORT: 4000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      DB_NAME: ${DB_NAME:-highway_led_control}
+      JWT_SECRET: ${JWT_SECRET:?run ./deploy.sh to create .env}
+      JWT_EXPIRES_IN: 8h
+      MQTT_URL: mqtt://mqtt:1883
+      SEED_ADMIN_USERNAME: ${SEED_ADMIN_USERNAME:?run ./deploy.sh to create .env}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?run ./deploy.sh to create .env}
+    ports:
+      - "127.0.0.1:${BACKEND_HOST_PORT:-4000}:4000"
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+
+volumes:
+  mysql_data:
